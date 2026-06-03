@@ -1,0 +1,6 @@
+{
+  "name": "Farmhouse Presale Planner",
+  "description": "An interactive operational planning dashboard for calculating presale product distribution, stores filtering, and recipe formula updates.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
