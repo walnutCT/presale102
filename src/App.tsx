@@ -23,6 +23,7 @@ import PresaleTable from './components/PresaleTable';
 import DailyCards from './components/DailyCards';
 import FinalSummaryTable from './components/FinalSummaryTable';
 import FarmhouseLogo from './components/FarmhouseLogo';
+import LoginPage from './components/LoginPage';
 import { Product, StoreFilterState, DailyCardData, FormulaType } from './types';
 import { INITIAL_PRODUCTS, INITIAL_DAILY_DATA, CATEGORY_DEFINITIONS } from './data';
 
@@ -82,6 +83,33 @@ export default function App() {
     }
   }, [finalizedProducts]);
 
+  // Authentication access control state (Session-scoped for excellent UX)
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    return sessionStorage.getItem('farmhouse_logged_in') === 'true';
+  });
+
+  const [loggedInUser, setLoggedInUser] = useState<string>(() => {
+    return sessionStorage.getItem('farmhouse_username') || '';
+  });
+
+  // Custom confirmation dialog state bypassing sandboxed iframe window.confirm block
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  const triggerConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmModal({
+      title,
+      message,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmModal(null);
+      }
+    });
+  };
+
   // Product toggle checked state
   const handleToggleProduct = (id: string) => {
     setProducts(prev => prev.map(p => p.id === id ? { ...p, selected: !p.selected } : p));
@@ -89,7 +117,7 @@ export default function App() {
 
   // Toggle all visible products listed in current filtered view
   const handleToggleAllProducts = (checked: boolean) => {
-    const visibleIds = getFilteredProducts().map(p => p.id);
+    const visibleIds = products.map(p => p.id);
     setProducts(prev => prev.map(p => visibleIds.includes(p.id) ? { ...p, selected: checked } : p));
   };
 
@@ -178,11 +206,15 @@ export default function App() {
 
   // Clear/Reset entire board state to default templates
   const handleResetEntireBoard = () => {
-    if (window.confirm("คุณต้องการรีเซ็ตแผนการคำนวณ Presale กลับเป็นค่าเริ่มต้นใช่หรือไม่?")) {
-      setProducts(INITIAL_PRODUCTS);
-      setFinalizedProducts(null);
-      setSelectedFormula(null);
-    }
+    triggerConfirm(
+      "รีเซ็ตข้อมูลทั้งหมด",
+      "คุณต้องการรีเซ็ตแผนการคำนวณ Presale กลับเป็นค่าเริ่มต้นและล้างข้อมูลรายงานในตารางสรุปใช่หรือไม่?",
+      () => {
+        setProducts(INITIAL_PRODUCTS);
+        setFinalizedProducts(null);
+        setSelectedFormula(null);
+      }
+    );
   };
 
   // Handler to merge imported database catalogs into live states!
@@ -247,8 +279,8 @@ export default function App() {
   };
 
   // Core filter logic matching selected tags from user interactive sidebar
-  const getFilteredProducts = () => {
-    return products.filter(p => {
+  const getFilteredProductsList = (list: Product[]) => {
+    return list.filter(p => {
       // Filter by main product type (piece, slice, long)
       if (filters.productType !== 'all') {
         const catDef = CATEGORY_DEFINITIONS.find(c => c.name === p.category);
@@ -269,10 +301,23 @@ export default function App() {
   };
 
   // Computations for active summary variables to supply daily tiles
-  const activeFilteredProducts = getFilteredProducts();
-  const totalPriceAmt = activeFilteredProducts.reduce((sum, p) => sum + p.price, 0);
-  const totalOverrideQty = activeFilteredProducts.reduce((sum, p) => sum + p.overrideQty, 0);
-  const selectedCount = activeFilteredProducts.filter(p => p.selected).length;
+  const totalPriceAmt = products.reduce((sum, p) => sum + p.price, 0);
+  const totalOverrideQty = products.reduce((sum, p) => sum + p.overrideQty, 0);
+  const selectedCount = products.filter(p => p.selected).length;
+
+  // Render authentic login portal if user is unauthenticated
+  if (!isLoggedIn) {
+    return (
+      <LoginPage
+        onLoginSuccess={(user) => {
+          setIsLoggedIn(true);
+          setLoggedInUser(user);
+          sessionStorage.setItem('farmhouse_logged_in', 'true');
+          sessionStorage.setItem('farmhouse_username', user);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-800">
@@ -284,14 +329,46 @@ export default function App() {
           <FarmhouseLogo />
         </div>
 
-        {/* User profile with placeholder dropdown */}
+        {/* User profile with dropdown logout function */}
         <div className="flex items-center gap-3">
           <div className="text-right hidden sm:block">
-            <div className="text-xs font-bold text-slate-100 font-sans tracking-wide">USER123</div>
+            <div className="text-xs font-bold text-slate-100 font-sans tracking-wide uppercase">{loggedInUser || 'admin'}</div>
+            <button
+              onClick={() => {
+                triggerConfirm(
+                  "ออกจากระบบ",
+                  "คุณต้องการออกจากระบบจากโปรแกรมคำนวณ Presale ฟาร์มเฮ้าส์ใช่หรือไม่?",
+                  () => {
+                    setIsLoggedIn(false);
+                    setLoggedInUser('');
+                    sessionStorage.removeItem('farmhouse_logged_in');
+                    sessionStorage.removeItem('farmhouse_username');
+                  }
+                );
+              }}
+              className="text-[10px] text-red-200/90 hover:text-white transition-colors underline block cursor-pointer text-right w-full font-medium"
+            >
+              ออกจากระบบ
+            </button>
           </div>
-          <div className="relative group cursor-pointer">
+          <div 
+            onClick={() => {
+              triggerConfirm(
+                "ออกจากระบบ",
+                "คุณต้องการออกจากระบบจากโปรแกรมคำนวณ Presale ฟาร์มเฮ้าส์ใช่หรือไม่?",
+                () => {
+                  setIsLoggedIn(false);
+                  setLoggedInUser('');
+                  sessionStorage.removeItem('farmhouse_logged_in');
+                  sessionStorage.removeItem('farmhouse_username');
+                }
+              );
+            }}
+            title="คลิกเพื่อออกจากระบบ"
+            className="relative cursor-pointer group"
+          >
             <div className="h-9 w-9 rounded-full bg-orange-400 text-white flex items-center justify-center font-black border-2 border-white/60 shadow-md group-hover:scale-105 transition-all">
-              TH
+              {(loggedInUser || 'admin').slice(0, 2).toUpperCase()}
             </div>
             <span className="absolute bottom-0 right-0 h-2.5 w-2.5 bg-emerald-500 rounded-full border-2 border-red-600 shadow-sm animate-pulse"></span>
           </div>
@@ -329,7 +406,7 @@ export default function App() {
 
           {/* CENTRAL ACTION WORKBOOK TABLE */}
           <PresaleTable
-            products={activeFilteredProducts}
+            products={products}
             onToggleProduct={handleToggleProduct}
             onToggleAllProducts={handleToggleAllProducts}
             onDeleteSelected={handleDeleteSelected}
@@ -358,11 +435,58 @@ export default function App() {
 
           {/* FINAL SUMMARY REPORT TABLE (REVEALED AND PERSISTENT ON SAVE) */}
           <div className="pt-4 border-t border-slate-200">
-            <FinalSummaryTable finalizedProducts={finalizedProducts} />
+            <FinalSummaryTable finalizedProducts={finalizedProducts ? getFilteredProductsList(finalizedProducts) : null} />
           </div>
 
         </main>
       </div>
+
+      {/* CUSTOM CONFIRMATION DIALOG BYPASSING IFRAME WINDOW.CONFIRM SECURITY BLOCKS */}
+      {confirmModal && (
+        <div 
+          id="custom-confirm-modal-backdrop"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in"
+        >
+          <div 
+            id="custom-confirm-modal-card"
+            className="bg-white rounded-2xl max-w-sm w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col relative transform scale-100 transition-all font-sans"
+          >
+            {/* Header with warm/red accent info */}
+            <div className="bg-[#ba191a] px-5 py-4 text-white flex items-center gap-2.5">
+              <span className="font-extrabold text-sm tracking-wide uppercase">{confirmModal.title}</span>
+            </div>
+            
+            {/* Message Body */}
+            <div className="p-5">
+              <p className="text-slate-600 text-xs font-bold leading-relaxed">
+                {confirmModal.message}
+              </p>
+            </div>
+            
+            {/* Decision Actions Button Group */}
+            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <button
+                id="confirm-modal-cancel-btn"
+                type="button"
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-extrabold text-[11px] rounded-lg transition-all cursor-pointer"
+              >
+                ยกเลิก (Cancel)
+              </button>
+              <button
+                id="confirm-modal-confirm-btn"
+                type="button"
+                onClick={() => {
+                  confirmModal.onConfirm();
+                }}
+                className="px-5 py-2 bg-[#ba191a] hover:bg-[#a01516] text-white font-black text-[11px] tracking-wider rounded-lg transition-all shadow active:scale-95 cursor-pointer"
+              >
+                ยืนยัน (Confirm)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

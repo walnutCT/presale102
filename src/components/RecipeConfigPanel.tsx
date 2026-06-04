@@ -16,15 +16,15 @@ interface RecipeConfigPanelProps {
 }
 
 const FORMULA_TITLES: Record<FormulaType, string> = {
-  add_percent: 'เพิ่มแบบ%',
-  add_first_min: 'เพิ่มแบบจำนวนFrist Min',
-  add_min_1: 'เพิ่มแบบMin 1',
-  add_pieces: 'เพิ่มแบบจำนวนชิ้น',
-  reset_zero: 'ลด set 0',
-  reduce_percent: 'ลดแบบ%',
-  reduce_min_1: 'ลดแบบMin 1',
-  reduce_pieces: 'ลดแบบจำนวนชิ้น',
-  upload_file: 'อัพโหลดไฟล์',
+  add_percent: 'สูตรเพิ่มแบบร้อยละ (Add by %)',
+  add_first_min: 'สูตรเพิ่มแบบขั้นต่ำตัวแรก (Add First Min)',
+  add_min_1: 'สูตรเพิ่มแบบขั้นต่ำอย่างน้อย 1 ชิ้น (Add Min1)',
+  add_pieces: 'สูตรเพิ่มเป็นจำนวนชิ้น (Add by piece count)',
+  reset_zero: 'สูตรลดเซตยอดเป็น 0 (Reduce Set 0)',
+  reduce_percent: 'สูตรลดแบบร้อยละ (Reduce by %)',
+  reduce_min_1: 'สูตรลดแบบขั้นต่ำอย่างน้อย 1 ชิ้น (Reduce Min1)',
+  reduce_pieces: 'สูตรลดเป็นจำนวนชิ้น (Reduce by piece count)',
+  upload_file: 'อัพโหลดไฟล์แผนพรีเซล (Upload File)',
 };
 
 // Key items displayed in the left preview board corresponding perfectly to the mockup screenshot
@@ -487,15 +487,15 @@ export default function RecipeConfigPanel({
               {/* Radio Formula Select Group inside 2 Columns */}
               <div className="grid grid-cols-2 gap-x-4 gap-y-2 pt-1">
                 <div className="space-y-2">
-                  {renderCustomRadio('replace', 'ทับยอดตามไฟล์')}
-                  {renderCustomRadio('replace_fixl', 'ทับยอดตามไฟล์ Fixl')}
-                  {renderCustomRadio('add_pieces', 'เพิ่มยอดตามไฟล์ (ชิ้น)')}
-                  {renderCustomRadio('add_percent', 'เพิ่มยอดตามไฟล์ (%)')}
+                  {renderCustomRadio('replace', 'ทับยอดตามไฟล์ (replace)')}
+                  {renderCustomRadio('replace_fixl', 'ทับยอดฟิกส์ (replace Fix1)')}
+                  {renderCustomRadio('add_pieces', 'เพิ่มยอดตามไฟล์ (+ชิ้น)')}
+                  {renderCustomRadio('add_percent', 'เพิ่มยอดตามไฟล์ (+%)')}
                 </div>
 
                 <div className="space-y-2">
-                  {renderCustomRadio('reduce_pieces', 'ลดยอดตามไฟล์ (ชิ้น)')}
-                  {renderCustomRadio('reduce_percent', 'ลดยอดตามไฟล์ (%)')}
+                  {renderCustomRadio('reduce_pieces', 'ลดยอดตามไฟล์ (-ชิ้น)')}
+                  {renderCustomRadio('reduce_percent', 'ลดยอดตามไฟล์ (-%)')}
                 </div>
               </div>
 
@@ -609,6 +609,53 @@ export default function RecipeConfigPanel({
   const titleText = FORMULA_TITLES[selectedFormula] || 'สูตรคำนวณ';
   const isQtyBased = selectedFormula === 'add_pieces' || selectedFormula === 'reduce_pieces' || selectedFormula === 'add_first_min';
   const hasLookbackRow = selectedFormula !== 'add_first_min'; // hide "วันย้อนหลัง" for first min
+
+  const formulaExplanation = selectedFormula ? (() => {
+    switch (selectedFormula) {
+      case 'add_pieces':
+        return {
+          formula: `สูตร: ยอดใหม่ = MULTI_QTY + ${mainValue} ชิ้น`,
+          desc: "บวกจำนวนชิ้นจากฐานคำนวณเดิม มีผลแยกปรับรายรหัสสินค้าที่เลือกไว้"
+        };
+      case 'add_percent':
+        return {
+          formula: `สูตร: ยอดใหม่ = MULTI_QTY * (1 + ${mainValue}%)`,
+          desc: "เพิ่มจำนวนสั่งผลิตตามอัตราสัดส่วนร้อยละ (%) เหมาะสำหรับการดันสต็อกสาขาทุกเกรด"
+        };
+      case 'add_first_min':
+        return {
+          formula: `สูตร: ยอดใหม่ = ค่าที่มากสุดถัดไป (ยอดปัจจุบัน, ${mainValue} ชิ้น)`,
+          desc: "ประกันยอดจัดส่งขั้นต่ำตัวแรก หากยอดจำหน่ายกลุ่มร้านค้าต่ำกว่าเกณฑ์จะดึงยอดให้เท่าค่ามาตรฐานนี้ทันที"
+        };
+      case 'add_min_1':
+        return {
+          formula: `สูตร: ยอดใหม่ = ยอดปัจจุบัน + 1 ชิ้น (จัดส่งอย่างน้อย 1 ชิ้น)`,
+          desc: "ป้องกันสินค้าขาดหน้าตู้ของร้าน โดยช่วยดันยอดให้ไม่เป็นศูนย์"
+        };
+      case 'reduce_pieces':
+        return {
+          formula: `สูตร: ยอดใหม่ = ยอดปัจจุบัน - ${mainValue} ชิ้น (ไม่ต่ำกว่า 0)`,
+          desc: "ดึงยูนิตจัดส่งจัดจำหน่ายลงตามจำนวนชิ้นตรงๆ ประยุกต์ใช้เมื่อต้องการปรับยอดลดความเสี่ยงเสียซาก"
+        };
+      case 'reduce_percent':
+        return {
+          formula: `สูตร: ยอดใหม่ = ยอดปัจจุบัน * (1 - ${mainValue}%) (ไม่ต่ำกว่า 0)`,
+          desc: "ดร้อนปริมาณสินค้าลงตามเปอร์เซ็นต์ส่วนแบ่ง สำหรับช่วงเทศกาลหรือวันหยุดยาว"
+        };
+      case 'reduce_min_1':
+        return {
+          formula: `สูตร: ยอดใหม่ = ยอดปัจจุบัน - ${mainValue} ชิ้น (รักษายอดโชว์ขั้นต่ำ 1 ชิ้น)`,
+          desc: "ช่วยลดโควต้าการจัดส่งลงได้ แต่รับประกันว่าหน้าตู้วางจำหน่ายจะยังคงเห็นโดนัท/หรือแผ่นขนมปังอย่างน้อย 1 ชิ้นโชว์แบรนด์"
+        };
+      case 'reset_zero':
+        return {
+          formula: `สูตร: ยอดใหม่ = 0 ชิ้น`,
+          desc: "ปิดบอร์ดและเซ็ตค่าปรับยอดทั้งหมดเป็นศูนย์ เพื่อเริ่มทำการหยอดคำนวณบรีฟพรีเซลรอบใหม่"
+        };
+      default:
+        return null;
+    }
+  })() : null;
 
   return (
     <div className="space-y-3 font-sans" id="recipe-container-block">
@@ -850,6 +897,19 @@ export default function RecipeConfigPanel({
                   className="px-3.5 py-1.5 border border-slate-200 bg-white rounded font-medium text-slate-705 w-40 text-xs placeholder:text-slate-300 focus:outline-none focus:ring-1 focus:ring-red-500 shadow-sm"
                 />
               </div>
+
+              {/* Interactive Mathematical Formula Explanation matching Flowchart */}
+              {formulaExplanation && (
+                <div className="mt-4 p-3.5 bg-[#fff8f8] border border-red-100/70 rounded-xl space-y-1.2 text-[11px] leading-relaxed shadow-sm">
+                  <div className="flex items-center gap-1.5 font-black text-[#ba191a]">
+                    <span className="px-1.5 py-0.5 bg-red-100 text-[#ba191a] text-[9.5px] rounded-md font-black font-mono tracking-tight shrink-0">สูตรคำนวณ</span>
+                    <span className="font-mono bg-white px-2 py-0.5 rounded border border-red-100/50">{formulaExplanation.formula}</span>
+                  </div>
+                  <p className="text-slate-500 font-medium text-[11px]">
+                    {formulaExplanation.desc}
+                  </p>
+                </div>
+              )}
 
             </div>
           </div>

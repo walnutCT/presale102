@@ -622,7 +622,7 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* SECTION 4: เลือกสูตรการสับบอร์ด (RECIPE FORMULAS) */}
+      {/* SECTION 4: เลือกสูตรคำนวณและปรับยอด (RECIPE FORMULAS) */}
       <div className="border-b border-slate-100">
         <button
           onClick={() => toggleSection('formulas')}
@@ -630,7 +630,7 @@ export default function Sidebar({
         >
           <span className="flex items-center gap-2 uppercase tracking-tight text-xs">
             <Sliders className="w-4.5 h-4.5" />
-            <span>3. สูตรสับบอร์ด PRESALE</span>
+            <span>3. สูตรปรับยอด PRESALE</span>
           </span>
           {openSection.formulas ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
         </button>

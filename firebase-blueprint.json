@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "product": {
+      "title": "Product",
+      "description": "Product catalog item with pricing and classification",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "รหัสสินค้า"
+        },
+        "name": {
+          "type": "string",
+          "description": "ชื่อสินค้า"
+        },
+        "categoryCode": {
+          "type": "string",
+          "description": "รหัสกลุ่มสินค้า"
+        },
+        "categoryName": {
+          "type": "string",
+          "description": "ชื่อกลุ่มสินค้า"
+        },
+        "productType": {
+          "type": "string",
+          "description": "ประเภทสินค้า",
+          "enum": ["piece", "slice", "long"]
+        }
+      },
+      "required": ["code", "name", "categoryCode", "categoryName", "productType"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "product",
+      "description": "Collection of all system products and configurations"
+    }
+  }
+}

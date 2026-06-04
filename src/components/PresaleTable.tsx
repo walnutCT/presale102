@@ -341,13 +341,8 @@ export default function PresaleTable({
                     <td className="p-3 text-right font-mono text-slate-700 text-xs font-semibold">
                       {p.multiQty.toLocaleString()}
                     </td>
-                    <td className="p-3 text-right font-mono text-xs">
-                      <input
-                        type="number"
-                        className="w-18 px-2 py-0.5 border border-slate-200 hover:border-slate-300 focus:border-red-500 rounded text-right focus:outline-none font-semibold text-slate-800 focus:ring-1 focus:ring-red-300"
-                        value={p.plusQty}
-                        onChange={e => onUpdatePlusQtyDirectly(p.id, Math.max(0, parseInt(e.target.value) || 0))}
-                      />
+                    <td className="p-3 text-right font-mono text-slate-700 text-xs font-semibold">
+                      {p.plusQty.toLocaleString()}
                     </td>
                     <td className={`p-3 text-right font-mono text-xs font-bold ${
                       p.overrideQty < 0 ? 'text-rose-600' : p.overrideQty > 0 ? 'text-emerald-600' : 'text-slate-500'
