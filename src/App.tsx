@@ -30,15 +30,30 @@ import { INITIAL_PRODUCTS, INITIAL_DAILY_DATA, CATEGORY_DEFINITIONS } from './da
 export default function App() {
   // Products management state
   const [products, setProducts] = useState<Product[]>(() => {
-    const cached = localStorage.getItem('farmhouse_presale_products');
-    return cached ? JSON.parse(cached) : INITIAL_PRODUCTS;
+    const cached = localStorage.getItem('farmhouse_presale_products_v3');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached) as Product[];
+        const cachedCodes = new Set(parsed.map(p => p.code));
+        const missing = INITIAL_PRODUCTS.filter(p => !cachedCodes.has(p.code));
+        if (missing.length > 0) {
+          return [...parsed, ...missing];
+        }
+        return parsed;
+      } catch (e) {
+        return INITIAL_PRODUCTS;
+      }
+    }
+    // Clean old caches
+    localStorage.removeItem('farmhouse_presale_products');
+    return INITIAL_PRODUCTS;
   });
 
   // Filters management state
   const [filters, setFilters] = useState<StoreFilterState>({
     productType: 'slice', // match screenshot starting context (sandwich/slice slice)
     searchCategory: '',
-    selectedCategories: ['เดลี่แซนวิช', 'ขนมปังยอดตลอดครัมเล็ก', 'โดนัท', 'บราวนี่', 'สินค้าอายุยาว'], // pre-ticked matching UI list
+    selectedCategories: ['ขนมปังแผ่นทั่วไป', 'ขนมปังโฮลวีต', 'ขนมปังแถวพรีเมียม', 'ขนมปังแถวมีไส้'], // pre-ticked matching UI list
     searchProduct: '',
     selectedProducts: INITIAL_PRODUCTS.map(p => p.id), // Initially select all so the workbook is prepopulated
     searchStoreGroup: '',
@@ -72,7 +87,7 @@ export default function App() {
 
   // Auto caching side effects
   useEffect(() => {
-    localStorage.setItem('farmhouse_presale_products', JSON.stringify(products));
+    localStorage.setItem('farmhouse_presale_products_v3', JSON.stringify(products));
   }, [products]);
 
   useEffect(() => {
@@ -117,7 +132,7 @@ export default function App() {
 
   // Toggle all visible products listed in current filtered view
   const handleToggleAllProducts = (checked: boolean) => {
-    const visibleIds = products.map(p => p.id);
+    const visibleIds = getFilteredProductsList(products).map(p => p.id);
     setProducts(prev => prev.map(p => visibleIds.includes(p.id) ? { ...p, selected: checked } : p));
   };
 
@@ -324,7 +339,7 @@ export default function App() {
       
       {/* BRAND HEADER BAR */}
       <header className="bg-[#ba191a] text-white h-16 shadow-md flex items-center justify-between px-6 shrink-0 relative z-30">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-6">
           {/* Authentic Farmhouse Brand Logo matching specification */}
           <FarmhouseLogo />
         </div>
@@ -406,7 +421,7 @@ export default function App() {
 
           {/* CENTRAL ACTION WORKBOOK TABLE */}
           <PresaleTable
-            products={products}
+            products={getFilteredProductsList(products)}
             onToggleProduct={handleToggleProduct}
             onToggleAllProducts={handleToggleAllProducts}
             onDeleteSelected={handleDeleteSelected}

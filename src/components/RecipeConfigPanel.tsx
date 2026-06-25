@@ -43,10 +43,7 @@ export default function RecipeConfigPanel({
   const [mainValue, setMainValue] = useState<number>(20);
   const [genComparison, setGenComparison] = useState<string>('<=');
   const [genValue, setGenValue] = useState<number>(0);
-  const [lookbackDays, setLookbackDays] = useState<number>(4);
-  const [lookbackComparison, setLookbackComparison] = useState<string>('<=');
-  const [lookbackPercent, setLookbackPercent] = useState<number>(20);
-  const [targetProductCode, setTargetProductCode] = useState<string>('');
+
 
   // This state holds the temporary calculated products that are shown in the left preview panel
   // Before pressing "บันทึกเข้าสู่ระบบ", these calculations are only local here!
@@ -608,54 +605,6 @@ export default function RecipeConfigPanel({
 
   const titleText = FORMULA_TITLES[selectedFormula] || 'สูตรคำนวณ';
   const isQtyBased = selectedFormula === 'add_pieces' || selectedFormula === 'reduce_pieces' || selectedFormula === 'add_first_min';
-  const hasLookbackRow = selectedFormula !== 'add_first_min'; // hide "วันย้อนหลัง" for first min
-
-  const formulaExplanation = selectedFormula ? (() => {
-    switch (selectedFormula) {
-      case 'add_pieces':
-        return {
-          formula: `สูตร: ยอดใหม่ = MULTI_QTY + ${mainValue} ชิ้น`,
-          desc: "บวกจำนวนชิ้นจากฐานคำนวณเดิม มีผลแยกปรับรายรหัสสินค้าที่เลือกไว้"
-        };
-      case 'add_percent':
-        return {
-          formula: `สูตร: ยอดใหม่ = MULTI_QTY * (1 + ${mainValue}%)`,
-          desc: "เพิ่มจำนวนสั่งผลิตตามอัตราสัดส่วนร้อยละ (%) เหมาะสำหรับการดันสต็อกสาขาทุกเกรด"
-        };
-      case 'add_first_min':
-        return {
-          formula: `สูตร: ยอดใหม่ = ค่าที่มากสุดถัดไป (ยอดปัจจุบัน, ${mainValue} ชิ้น)`,
-          desc: "ประกันยอดจัดส่งขั้นต่ำตัวแรก หากยอดจำหน่ายกลุ่มร้านค้าต่ำกว่าเกณฑ์จะดึงยอดให้เท่าค่ามาตรฐานนี้ทันที"
-        };
-      case 'add_min_1':
-        return {
-          formula: `สูตร: ยอดใหม่ = ยอดปัจจุบัน + 1 ชิ้น (จัดส่งอย่างน้อย 1 ชิ้น)`,
-          desc: "ป้องกันสินค้าขาดหน้าตู้ของร้าน โดยช่วยดันยอดให้ไม่เป็นศูนย์"
-        };
-      case 'reduce_pieces':
-        return {
-          formula: `สูตร: ยอดใหม่ = ยอดปัจจุบัน - ${mainValue} ชิ้น (ไม่ต่ำกว่า 0)`,
-          desc: "ดึงยูนิตจัดส่งจัดจำหน่ายลงตามจำนวนชิ้นตรงๆ ประยุกต์ใช้เมื่อต้องการปรับยอดลดความเสี่ยงเสียซาก"
-        };
-      case 'reduce_percent':
-        return {
-          formula: `สูตร: ยอดใหม่ = ยอดปัจจุบัน * (1 - ${mainValue}%) (ไม่ต่ำกว่า 0)`,
-          desc: "ดร้อนปริมาณสินค้าลงตามเปอร์เซ็นต์ส่วนแบ่ง สำหรับช่วงเทศกาลหรือวันหยุดยาว"
-        };
-      case 'reduce_min_1':
-        return {
-          formula: `สูตร: ยอดใหม่ = ยอดปัจจุบัน - ${mainValue} ชิ้น (รักษายอดโชว์ขั้นต่ำ 1 ชิ้น)`,
-          desc: "ช่วยลดโควต้าการจัดส่งลงได้ แต่รับประกันว่าหน้าตู้วางจำหน่ายจะยังคงเห็นโดนัท/หรือแผ่นขนมปังอย่างน้อย 1 ชิ้นโชว์แบรนด์"
-        };
-      case 'reset_zero':
-        return {
-          formula: `สูตร: ยอดใหม่ = 0 ชิ้น`,
-          desc: "ปิดบอร์ดและเซ็ตค่าปรับยอดทั้งหมดเป็นศูนย์ เพื่อเริ่มทำการหยอดคำนวณบรีฟพรีเซลรอบใหม่"
-        };
-      default:
-        return null;
-    }
-  })() : null;
 
   return (
     <div className="space-y-3 font-sans" id="recipe-container-block">
@@ -834,82 +783,9 @@ export default function RecipeConfigPanel({
                 />
               </div>
 
-              {/* Row 3: History parameters (Lookback duration and rates) */}
-              {hasLookbackRow && (
-                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2 text-xs font-semibold text-slate-705">
-                  <span className="min-w-[70px] text-slate-500 font-bold">วันย้อนหลัง</span>
-                  
-                  <div className="relative">
-                    <select
-                      value={lookbackDays}
-                      onChange={(e) => setLookbackDays(parseInt(e.target.value) || 4)}
-                      className="px-4 py-1.5 border border-slate-200 bg-white rounded text-slate-800 font-extrabold text-center appearance-none pr-8 cursor-pointer focus:outline-none focus:ring-1 focus:ring-red-500 shadow-sm w-20"
-                    >
-                      <option value={1}>1</option>
-                      <option value={2}>2</option>
-                      <option value={3}>3</option>
-                      <option value={4}>4</option>
-                      <option value={5}>5</option>
-                      <option value={7}>7</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
-                      <svg className="fill-current h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                        <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                      </svg>
-                    </div>
-                  </div>
 
-                  <div className="relative">
-                    <select
-                      value={lookbackComparison}
-                      onChange={(e) => setLookbackComparison(e.target.value)}
-                      className="px-3 py-1.5 border border-slate-200 bg-white rounded text-slate-700 font-bold text-center appearance-none pr-8 cursor-pointer focus:outline-none focus:ring-1 focus:ring-red-500 shadow-sm"
-                    >
-                      <option value="<=">&lt;=</option>
-                      <option value=">=">&gt;=</option>
-                      <option value="=">=</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
-                      <svg className="fill-current h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                        <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                      </svg>
-                    </div>
-                  </div>
 
-                  <input
-                    type="number"
-                    value={lookbackPercent}
-                    onChange={(e) => setLookbackPercent(parseInt(e.target.value) || 20)}
-                    className="px-3 py-1.5 border border-slate-200 bg-white rounded text-slate-800 text-center font-extrabold w-20 focus:outline-none focus:ring-1 focus:ring-red-350 shadow-sm"
-                  />
-                  <span className="font-extrabold text-slate-500">%</span>
-                </div>
-              )}
 
-              {/* Row 4: Specific target item matching code */}
-              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2 text-xs font-semibold text-slate-705">
-                <span className="min-w-[70px] text-slate-500 font-bold">ที่ลงสินค้า</span>
-                <input
-                  type="text"
-                  placeholder="รหัสสินค้า..."
-                  value={targetProductCode}
-                  onChange={(e) => setTargetProductCode(e.target.value)}
-                  className="px-3.5 py-1.5 border border-slate-200 bg-white rounded font-medium text-slate-705 w-40 text-xs placeholder:text-slate-300 focus:outline-none focus:ring-1 focus:ring-red-500 shadow-sm"
-                />
-              </div>
-
-              {/* Interactive Mathematical Formula Explanation matching Flowchart */}
-              {formulaExplanation && (
-                <div className="mt-4 p-3.5 bg-[#fff8f8] border border-red-100/70 rounded-xl space-y-1.2 text-[11px] leading-relaxed shadow-sm">
-                  <div className="flex items-center gap-1.5 font-black text-[#ba191a]">
-                    <span className="px-1.5 py-0.5 bg-red-100 text-[#ba191a] text-[9.5px] rounded-md font-black font-mono tracking-tight shrink-0">สูตรคำนวณ</span>
-                    <span className="font-mono bg-white px-2 py-0.5 rounded border border-red-100/50">{formulaExplanation.formula}</span>
-                  </div>
-                  <p className="text-slate-500 font-medium text-[11px]">
-                    {formulaExplanation.desc}
-                  </p>
-                </div>
-              )}
 
             </div>
           </div>

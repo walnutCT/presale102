@@ -133,7 +133,6 @@ export default function Sidebar({
       nextCats = filters.selectedCategories.filter(name => !visibleNames.includes(name));
     } else {
       // Add all visible categories
-      nextCatsArrayUnion(filters.selectedCategories, visibleNames);
       nextCats = Array.from(new Set([...filters.selectedCategories, ...visibleNames]));
     }
     onChangeFilters({ ...filters, selectedCategories: nextCats });
@@ -294,7 +293,14 @@ export default function Sidebar({
                       key={tab}
                       type="button"
                       onClick={() => {
-                        onChangeFilters({ ...filters, productType: tab });
+                        const targetCats = tab === 'all'
+                          ? CATEGORY_DEFINITIONS.map(c => c.name)
+                          : CATEGORY_DEFINITIONS.filter(c => c.type === tab).map(c => c.name);
+                        onChangeFilters({
+                          ...filters,
+                          productType: tab,
+                          selectedCategories: targetCats
+                        });
                       }}
                       className={`py-1.5 text-center font-extrabold rounded text-[10px] md:text-[11px] transition-all truncate cursor-pointer ${
                         isActive
@@ -720,10 +726,7 @@ export default function Sidebar({
               </div>
             </div>
 
-            <div className="p-3 rounded-lg bg-red-50/40 border border-red-100/60 text-[11px] text-red-750 font-bold leading-relaxed">
-              <span className="font-extrabold text-[#ba191a] ring-1 ring-red-200 px-1 py-0.2 bg-white rounded mr-1">TIPS:</span> 
-              ทำเครื่องหมายถูก [✓] เลือกสินค้าในตารางขวาเพื่อปรับยอดผ่านสูตรคณิตศาสตร์แบบกลุ่ม ({selectedCount} ชิ้นที่เลือก)
-            </div>
+
           </div>
         )}
       </div>
