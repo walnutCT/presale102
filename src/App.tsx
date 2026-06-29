@@ -130,9 +130,9 @@ export default function App() {
     setProducts(prev => prev.map(p => p.id === id ? { ...p, selected: !p.selected } : p));
   };
 
-  // Toggle all visible products listed in current filtered view
+  // Toggle all visible products listed in current view
   const handleToggleAllProducts = (checked: boolean) => {
-    const visibleIds = getFilteredProductsList(products).map(p => p.id);
+    const visibleIds = products.map(p => p.id);
     setProducts(prev => prev.map(p => visibleIds.includes(p.id) ? { ...p, selected: checked } : p));
   };
 
@@ -421,7 +421,7 @@ export default function App() {
 
           {/* CENTRAL ACTION WORKBOOK TABLE */}
           <PresaleTable
-            products={getFilteredProductsList(products)}
+            products={products}
             onToggleProduct={handleToggleProduct}
             onToggleAllProducts={handleToggleAllProducts}
             onDeleteSelected={handleDeleteSelected}
@@ -450,7 +450,7 @@ export default function App() {
 
           {/* FINAL SUMMARY REPORT TABLE (REVEALED AND PERSISTENT ON SAVE) */}
           <div className="pt-4 border-t border-slate-200">
-            <FinalSummaryTable finalizedProducts={finalizedProducts ? getFilteredProductsList(finalizedProducts) : null} />
+            <FinalSummaryTable finalizedProducts={finalizedProducts} />
           </div>
 
         </main>
