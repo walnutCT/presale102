@@ -5,6 +5,14 @@
 
 import { useState, useEffect } from 'react';
 import { FormulaType, Product, StoreFilterState } from '../types';
+import * as XLSX from 'xlsx';
+
+interface ValidationError {
+  row: number;
+  column: string;
+  value: string;
+  message: string;
+}
 
 interface RecipeConfigPanelProps {
   selectedFormula: FormulaType | null;
@@ -55,6 +63,9 @@ export default function RecipeConfigPanel({
   const [uploadSubFormula, setUploadSubFormula] = useState<string>('replace');
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [uploadedCsvRecords, setUploadedCsvRecords] = useState<{code: string; qty: number}[]>([]);
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [validationSummary, setValidationSummary] = useState<{ total: number; valid: number; invalid: number } | null>(null);
+  const [showSpecs, setShowSpecs] = useState<boolean>(true);
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
   const triggerToast = (msg: string) => {
@@ -76,44 +87,219 @@ export default function RecipeConfigPanel({
   // Filter preview items to show only the 3 important items matching mockup screenshots
   const demoItemsToShow = previewProducts.filter(p => TARGET_DEMO_CODES.includes(p.code));
 
-  // File reader for CSV
+  // File reader for CSV and Excel with robust validation of data types, capacities and formats
   const processUploadedFile = (file: File) => {
     setUploadedFileName(file.name);
+    setValidationErrors([]);
+    setValidationSummary(null);
     
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const lines = text.split("\n");
-      const records: { code: string; qty: number }[] = [];
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    
+    const validateAndSetRecords = (rawRows: { rawCode: string; rawQty: any; rowNum: number }[]) => {
+      const parsedRecords: { code: string; qty: number }[] = [];
+      const errors: ValidationError[] = [];
+      let validCount = 0;
+      let invalidCount = 0;
       
-      lines.forEach((line) => {
-        const parts = line.split(/[;,]/);
-        if (parts.length >= 2) {
-          const codeVal = parts[0].trim();
-          const qtyVal = parseInt(parts[1].trim());
-          if (codeVal && !isNaN(qtyVal)) {
-            // Clean code values (e.g., removing quotes)
-            const cleanCode = codeVal.replace(/["']/g, '');
-            records.push({ code: cleanCode, qty: qtyVal });
+      rawRows.forEach((row) => {
+        let isRowValid = true;
+        const cleanCode = row.rawCode ? String(row.rawCode).replace(/["']/g, '').trim() : '';
+        const rawQtyStr = row.rawQty !== undefined && row.rawQty !== null ? String(row.rawQty).trim() : '';
+        
+        // 1. Validate ITEM CODE (Type: String, Capacity: 13 chars, Format: numbers only)
+        if (!cleanCode) {
+          isRowValid = false;
+          errors.push({
+            row: row.rowNum,
+            column: 'ITEM CODE',
+            value: '(ว่าง)',
+            message: 'รหัสสินค้าต้องไม่เป็นค่าว่าง'
+          });
+        } else {
+          if (cleanCode.length !== 13) {
+            isRowValid = false;
+            errors.push({
+              row: row.rowNum,
+              column: 'ITEM CODE',
+              value: cleanCode,
+              message: `ความยาวรหัสสินค้าไม่ถูกต้อง (มี ${cleanCode.length} หลัก แต่ต้องมี 13 หลักพอดี)`
+            });
           }
+          if (!/^\d+$/.test(cleanCode)) {
+            isRowValid = false;
+            errors.push({
+              row: row.rowNum,
+              column: 'ITEM CODE',
+              value: cleanCode,
+              message: 'รหัสสินค้าต้องเป็นตัวเลขรหัสบาร์โค้ดเท่านั้น'
+            });
+          }
+        }
+        
+        // 2. Validate PCS (Type: Integer, Range: 0 - 99,999)
+        const qtyNum = parseInt(rawQtyStr);
+        if (rawQtyStr === '') {
+          isRowValid = false;
+          errors.push({
+            row: row.rowNum,
+            column: 'PCS',
+            value: '(ว่าง)',
+            message: 'จำนวนชิ้นต้องไม่เป็นค่าว่าง'
+          });
+        } else if (isNaN(qtyNum)) {
+          isRowValid = false;
+          errors.push({
+            row: row.rowNum,
+            column: 'PCS',
+            value: rawQtyStr,
+            message: 'จำนวนชิ้นต้องเป็นตัวเลขจำนวนเต็ม'
+          });
+        } else {
+          if (qtyNum < 0) {
+            isRowValid = false;
+            errors.push({
+              row: row.rowNum,
+              column: 'PCS',
+              value: String(qtyNum),
+              message: 'จำนวนชิ้นต้องไม่เป็นค่าติดลบ (ขั้นต่ำ 0 ชิ้น)'
+            });
+          } else if (qtyNum > 99999) {
+            isRowValid = false;
+            errors.push({
+              row: row.rowNum,
+              column: 'PCS',
+              value: String(qtyNum),
+              message: 'จำนวนชิ้นเกินขีดจำกัดความจุสูงสุด (สูงสุด 99,999 ชิ้น)'
+            });
+          }
+        }
+        
+        if (isRowValid) {
+          validCount++;
+          parsedRecords.push({ code: cleanCode, qty: qtyNum });
+        } else {
+          invalidCount++;
         }
       });
       
-      if (records.length > 0) {
-        setUploadedCsvRecords(records);
-        triggerToast(`นำเข้าสำเร็จ! อ่านข้อมูลได้ ${records.length} รายการจากไฟล์ "${file.name}"`);
+      setUploadedCsvRecords(parsedRecords);
+      setValidationErrors(errors);
+      setValidationSummary({
+        total: rawRows.length,
+        valid: validCount,
+        invalid: invalidCount
+      });
+      
+      if (validCount > 0) {
+        if (errors.length > 0) {
+          triggerToast(`นำเข้าเสร็จสิ้น! พบความผิดพลาดบางแถว: สำเร็จ ${validCount} รายการ, ข้อผิดพลาด ${invalidCount} รายการ`);
+        } else {
+          triggerToast(`นำเข้าสำเร็จ! อ่านข้อมูลรูปแบบถูกต้องครบถ้วน ${validCount} รายการ`);
+        }
       } else {
-        // Fallback simulated records if empty or non-compatible format
-        const mockRecords = [
-          { code: '8850123110108', qty: 137 },
-          { code: '8850123110115', qty: 112 },
-          { code: '8850123110146', qty: 72 },
-        ];
-        setUploadedCsvRecords(mockRecords);
-        triggerToast(`นำเข้าไฟล์ "${file.name}" แล้ว! (ใช้โครงแบบจำลองเพื่อเตรียมพร้อมคำนวณ)`);
+        triggerToast(`นำเข้าไม่สำเร็จ! ไม่พบข้อมูลที่ถูกต้องตามข้อกำหนดรูปแบบในไฟล์เลย`);
       }
     };
-    reader.readAsText(file);
+
+    if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const jsonData = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 });
+          
+          const rawRows: { rawCode: string; rawQty: any; rowNum: number }[] = [];
+          
+          let headerRowIndex = 0;
+          let codeColIndex = 0;
+          let qtyColIndex = 1;
+          
+          if (jsonData.length > 0) {
+            const firstRow = jsonData[0];
+            let foundHeader = false;
+            firstRow.forEach((val: any, idx: number) => {
+              const strVal = String(val).trim().toLowerCase();
+              if (strVal.includes('code') || strVal.includes('item') || strVal.includes('รหัส')) {
+                codeColIndex = idx;
+                foundHeader = true;
+              }
+              if (strVal.includes('pcs') || strVal.includes('qty') || strVal.includes('จำนวน') || strVal.includes('ยอด')) {
+                qtyColIndex = idx;
+                foundHeader = true;
+              }
+            });
+            if (foundHeader) {
+              headerRowIndex = 1;
+            } else {
+              codeColIndex = 0;
+              qtyColIndex = 1;
+              headerRowIndex = 0;
+            }
+          }
+          
+          for (let i = headerRowIndex; i < jsonData.length; i++) {
+            const row = jsonData[i];
+            if (!row || row.length === 0) continue;
+            if (row.every((cell: any) => cell === undefined || cell === null || String(cell).trim() === '')) {
+              continue;
+            }
+            
+            const rawCode = row[codeColIndex] !== undefined && row[codeColIndex] !== null ? String(row[codeColIndex]) : '';
+            const rawQty = row[qtyColIndex] !== undefined && row[qtyColIndex] !== null ? row[qtyColIndex] : '';
+            
+            rawRows.push({
+              rawCode,
+              rawQty,
+              rowNum: i + 1
+            });
+          }
+          
+          validateAndSetRecords(rawRows);
+        } catch (err: any) {
+          triggerToast(`เกิดข้อผิดพลาดในการอ่านไฟล์ Excel: ${err.message || err}`);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const text = e.target?.result as string;
+          const lines = text.split("\n");
+          const rawRows: { rawCode: string; rawQty: any; rowNum: number }[] = [];
+          
+          let lineNum = 0;
+          lines.forEach((line) => {
+            lineNum++;
+            const cleanLine = line.trim();
+            if (!cleanLine) return;
+            
+            const lowercaseLine = cleanLine.toLowerCase();
+            if (lineNum === 1 && (lowercaseLine.includes('code') || lowercaseLine.includes('item') || lowercaseLine.includes('รหัส') || lowercaseLine.includes('pcs') || lowercaseLine.includes('qty') || lowercaseLine.includes('จำนวน'))) {
+              return;
+            }
+            
+            const parts = cleanLine.split(/[;,]/);
+            const rawCode = parts[0] ? parts[0].trim() : '';
+            const rawQty = parts[1] ? parts[1].trim() : '';
+            
+            rawRows.push({
+              rawCode,
+              rawQty,
+              rowNum: lineNum
+            });
+          });
+          
+          validateAndSetRecords(rawRows);
+        } catch (err: any) {
+          triggerToast(`เกิดข้อผิดพลาดในการอ่านไฟล์ CSV: ${err.message || err}`);
+        }
+      };
+      reader.readAsText(file);
+    }
   };
 
   // Perform calculation specifically for Upload File modes
@@ -393,25 +579,68 @@ export default function RecipeConfigPanel({
                 </h2>
                 
                 {/* Clean hidden toggle for downloads if needed, styled minimally */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const csvHeader = "ITEM CODE,PCS\n8850123110108,137\n8850123110115,112\n8850123110146,72\n";
-                    const blob = new Blob([csvHeader], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.setAttribute("href", url);
-                    link.setAttribute("download", "presale_template.csv");
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    triggerToast("ดาวน์โหลดไฟล์ต้นแบบแม่แบบ .CSV เรียบร้อย!");
-                  }}
-                  className="text-[10px] text-slate-400 hover:text-red-700 font-bold transition-all"
-                >
-                  [ ดาวน์โหลดหน้าแม่แบบต้นทาง ]
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowSpecs(!showSpecs)}
+                    className="text-[10.5px] text-[#ba191a] hover:bg-red-50 font-black transition-all border border-red-200 bg-red-50/50 px-2.5 py-1 rounded-lg"
+                  >
+                    {showSpecs ? '✕ ซ่อนคู่มือรูปแบบ' : 'ℹ️ แสดงคู่มือรูปแบบ'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const csvHeader = "ITEM CODE,PCS\n8850123110108,137\n8850123110115,112\n8850123110146,72\n";
+                      const blob = new Blob([csvHeader], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement("a");
+                      link.setAttribute("href", url);
+                      link.setAttribute("download", "presale_template.csv");
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      triggerToast("ดาวน์โหลดไฟล์ต้นแบบแม่แบบ .CSV เรียบร้อย!");
+                    }}
+                    className="text-[10.5px] text-slate-400 hover:text-[#ba191a] font-bold transition-all"
+                  >
+                    [ ดาวน์โหลดแม่แบบ ]
+                  </button>
+                </div>
               </div>
+
+              {/* Data Schema Specs Panel (interactive per user prompt) */}
+              {showSpecs && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] space-y-2 animate-fade-in">
+                  <div className="font-extrabold text-slate-800 flex items-center gap-1">
+                    <span>📋 ข้อกำหนดประเภทและขนาดข้อมูล (Data Schema & Capacity Rules)</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm space-y-1">
+                      <div className="font-black text-slate-800 text-[11px] flex justify-between">
+                        <span>1. ITEM CODE (รหัสสินค้า)</span>
+                        <span className="text-[#ba191a] px-1.5 py-0.2 bg-red-50 rounded font-mono text-[9px] font-black">String</span>
+                      </div>
+                      <p className="text-slate-500 text-[10px] leading-relaxed">
+                        • ชนิดข้อมูล: <strong className="text-slate-700">ตัวเลข/บาร์โค้ด</strong><br />
+                        • ความยาว/ความจุ: <strong className="text-slate-700">13 หลักพอดี</strong><br />
+                        • ตัวอย่าง: <code className="bg-slate-100 px-1 font-mono text-[9.5px]">8850123110108</code>
+                      </p>
+                    </div>
+
+                    <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm space-y-1">
+                      <div className="font-black text-slate-800 text-[11px] flex justify-between">
+                        <span>2. PCS (จำนวนชิ้น)</span>
+                        <span className="text-[#ba191a] px-1.5 py-0.2 bg-red-50 rounded font-mono text-[9px] font-black">Integer</span>
+                      </div>
+                      <p className="text-slate-500 text-[10px] leading-relaxed">
+                        • ชนิดข้อมูล: <strong className="text-slate-700">จำนวนเต็มบวก</strong><br />
+                        • ขอบเขต/ความจุ: <strong className="text-slate-700">0 ถึง 99,999 ชิ้น</strong><br />
+                        • ตัวอย่าง: <code className="bg-slate-100 px-1 font-mono text-[9.5px]">137</code>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Dashed Drag Board Dropzone matching screenshot */}
               <div 
@@ -433,7 +662,7 @@ export default function RecipeConfigPanel({
                   type="file" 
                   id="config-panel-file-input" 
                   className="hidden" 
-                  accept=".csv,.xlsx,.xls,.txt"
+                  accept=".csv,.xlsx,.xls"
                   onChange={(e) => {
                     if (e.target.files && e.target.files[0]) {
                       processUploadedFile(e.target.files[0]);
@@ -459,7 +688,7 @@ export default function RecipeConfigPanel({
                       {uploadedFileName}
                     </p>
                     <p className="text-emerald-600 font-bold text-[10px] animate-pulse">
-                      ✓ อัพโหลดไฟล์สำหรับประมวลผลสำเร็จ
+                      ✓ อัพโหลดไฟล์สำเร็จเรียบร้อย
                     </p>
                   </div>
                 ) : (
@@ -467,8 +696,8 @@ export default function RecipeConfigPanel({
                     <p className="text-slate-800 font-black text-xs">
                       Choose a file or drag & drop it here
                     </p>
-                    <p className="text-slate-400 font-bold text-[10px]">
-                      ไฟล์ .CSV ที่เป็นแบบฟอร์มที่ทาง IT ให้เท่านั้น
+                    <p className="text-[#ba191a] font-black text-[10px]">
+                      รองรับเฉพาะไฟล์ .CSV หรือ Excel (.xlsx, .xls) เท่านั้น
                     </p>
                   </div>
                 )}
@@ -480,6 +709,50 @@ export default function RecipeConfigPanel({
                   Browse File
                 </button>
               </div>
+
+              {/* Validation Summary Reporting Area */}
+              {validationSummary && (
+                <div className="bg-[#fff8f8] border border-red-100 rounded-xl p-3 text-[11px] space-y-2 animate-fade-in">
+                  <div className="flex items-center justify-between font-black text-slate-800">
+                    <span>📊 สรุปผลการตรวจสอบข้อมูล (Validation Report)</span>
+                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                      ทั้งหมด {validationSummary.total} แถว
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-center text-[10.5px]">
+                    <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 py-1.5 rounded-lg font-bold">
+                      ผ่าน: {validationSummary.valid} แถว
+                    </div>
+                    <div className={`py-1.5 rounded-lg font-bold ${validationSummary.invalid > 0 ? 'bg-red-50 border border-red-200 text-red-800' : 'bg-slate-50 border border-slate-200 text-slate-500'}`}>
+                      ไม่ผ่าน/ผิดประเภท: {validationSummary.invalid} แถว
+                    </div>
+                  </div>
+
+                  {/* Errors log list */}
+                  {validationErrors.length > 0 && (
+                    <div className="border border-red-100 rounded-lg overflow-hidden bg-white max-h-[110px] overflow-y-auto">
+                      <div className="bg-red-50 text-red-900 px-2.5 py-1 text-[10px] font-black border-b border-red-100">
+                        รายการข้อผิดพลาดสะสม (แสดงสูงสุด 5 แถวแรก):
+                      </div>
+                      <div className="divide-y divide-red-50 text-[10px] font-medium text-slate-600">
+                        {validationErrors.slice(0, 5).map((err, i) => (
+                          <div key={i} className="px-2.5 py-1.5 hover:bg-red-50/30 flex items-start gap-1">
+                            <span className="text-red-600 font-mono font-black shrink-0">[แถว {err.row}]</span>
+                            <span className="font-semibold text-slate-700">{err.column}:</span>
+                            <span className="text-slate-500 truncate max-w-[80px]">"{err.value}"</span>
+                            <span className="text-red-500 ml-auto font-black">{err.message}</span>
+                          </div>
+                        ))}
+                        {validationErrors.length > 5 && (
+                          <div className="px-2.5 py-1.5 text-center text-slate-400 font-bold">
+                            ... และแถวอื่นที่มีรูปแบบไม่ถูกต้องอีก {validationErrors.length - 5} รายการ
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Radio Formula Select Group inside 2 Columns */}
               <div className="grid grid-cols-2 gap-x-4 gap-y-2 pt-1">

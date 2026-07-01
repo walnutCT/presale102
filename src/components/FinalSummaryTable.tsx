@@ -3,14 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Check, CheckSquare, Layers, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { Check, CheckSquare, Layers, AlertCircle, Download, FileSpreadsheet, X, AlertTriangle } from 'lucide-react';
 import { Product } from '../types';
+import * as XLSX from 'xlsx';
 
 interface FinalSummaryTableProps {
   finalizedProducts: Product[] | null;
 }
 
 export default function FinalSummaryTable({ finalizedProducts }: FinalSummaryTableProps) {
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingType, setPendingType] = useState<'csv' | 'xlsx' | null>(null);
+
   if (!finalizedProducts) {
     return (
       <div className="bg-white border border-slate-200 rounded-lg p-10 text-center shadow-sm">
@@ -36,11 +41,94 @@ export default function FinalSummaryTable({ finalizedProducts }: FinalSummaryTab
   const totalOverride = finalizedProducts.reduce((sum, p) => sum + p.overrideQty, 0);
   const totalPrice = finalizedProducts.reduce((sum, p) => sum + p.price, 0);
 
+  // Export utility for branch processing
+  const handleExportData = (type: 'csv' | 'xlsx') => {
+    if (!finalizedProducts || finalizedProducts.length === 0) return;
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    const fileName = `Presale_Final_Report_Branch_${dateStr}`;
+
+    if (type === 'xlsx') {
+      try {
+        // Map products into flat sheet representation
+        const rawSheetData = finalizedProducts.map((p, idx) => ({
+          'ลำดับ (No.)': idx + 1,
+          'รหัสสินค้า (ITEM CODE)': p.code,
+          'ชื่อสินค้า (ITEM NAME)': p.name,
+          'ประเภทสินค้า (CATEGORY)': p.category,
+          'ยอดตัวคูณ (MULTI_QTY)': p.multiQty,
+          'ยอดบวกเพิ่ม (PLUS_QTY)': p.plusQty,
+          'ยอดปรับปรุงสุทธิ (OVERRIDE_QTY)': p.overrideQty,
+          'มูลค่ารวมสุทธิ (PRICEAMT THB)': p.price,
+          'วันส่งมอบ (DELIVERY DATE)': p.delDate,
+          'สถานะการตรวจสอบ': 'ตรวจสอบแล้ว (CONFIRMED)'
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(rawSheetData);
+        
+        // Force column string type for Item Code to avoid Excel truncating leading zeros
+        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:A1');
+        for (let r = range.s.r + 1; r <= range.e.r; ++r) {
+          const cellAddress = XLSX.utils.encode_cell({ r, c: 1 }); // Column index 1 is ITEM CODE
+          const cell = worksheet[cellAddress];
+          if (cell) {
+            cell.t = 's'; // Force string type
+            cell.v = String(cell.v);
+          }
+        }
+
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Branch Summary');
+        XLSX.writeFile(workbook, `${fileName}.xlsx`);
+      } catch (err) {
+        console.error('Failed to export Excel, falling back to CSV format:', err);
+        handleExportData('csv');
+      }
+    } else {
+      // CSV Export with BOM character for Excel Thai language compatibility (UTF-8)
+      const headers = [
+        'No.',
+        'ITEM CODE',
+        'ITEM NAME',
+        'CATEGORY',
+        'MULTI_QTY',
+        'PLUS_QTY',
+        'OVERRIDE_QTY',
+        'PRICEAMT (THB)',
+        'DELIVERY DATE',
+        'STATUS'
+      ];
+      
+      const rows = finalizedProducts.map((p, idx) => [
+        idx + 1,
+        `="${p.code}"`, // Force Excel string import prefix to prevent numeric sci-notations
+        `"${p.name.replace(/"/g, '""')}"`,
+        `"${p.category.replace(/"/g, '""')}"`,
+        p.multiQty,
+        p.plusQty,
+        p.overrideQty,
+        p.price,
+        `="${p.delDate}"`,
+        'CONFIRMED'
+      ]);
+
+      const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `${fileName}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
   return (
     <div className="bg-white border border-slate-200 rounded-lg shadow-md text-sm overflow-hidden flex flex-col transition-all duration-300 transform border-l-[6px] border-l-emerald-500">
       
       {/* Table Banner Header in Green celebrating finalization */}
-      <div className="p-4 bg-gradient-to-r from-emerald-50 to-white border-b border-rose-100 flex items-center justify-between">
+      <div className="p-4 bg-gradient-to-r from-emerald-50 to-white border-b border-rose-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <div className="p-1 px-2.5 bg-emerald-600 text-white rounded font-bold text-[11px] uppercase tracking-wide flex items-center gap-1 shadow-inner">
             <Check className="w-3.5 h-3.5" />
@@ -50,8 +138,33 @@ export default function FinalSummaryTable({ finalizedProducts }: FinalSummaryTab
             ตารางสรุปการทำงาน Presale (Final)
           </h2>
         </div>
-        <div className="text-[11px] text-slate-400 font-medium font-mono">
-          บันทึกรายงานสรุปเมื่อ: {new Date().toLocaleTimeString()}
+        
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="text-[11px] text-slate-400 font-medium font-mono mr-1 hidden lg:block">
+            บันทึกรายงานสรุปเมื่อ: {new Date().toLocaleTimeString()}
+          </div>
+          <button
+            id="btn-final-summary-confirm-xlsx"
+            onClick={() => {
+              setPendingType('xlsx');
+              setShowConfirm(true);
+            }}
+            className="px-3.5 py-1.5 bg-[#ba191a] hover:bg-[#a11113] active:scale-[0.98] text-white text-[12px] font-black rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            <span>บันทึกและยืนยัน</span>
+          </button>
+          <button
+            id="btn-final-summary-confirm-csv"
+            onClick={() => {
+              setPendingType('csv');
+              setShowConfirm(true);
+            }}
+            className="px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-250 active:scale-[0.98] text-slate-700 text-[12px] font-black rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span>ส่งออก CSV</span>
+          </button>
         </div>
       </div>
 
@@ -146,6 +259,74 @@ export default function FinalSummaryTable({ finalizedProducts }: FinalSummaryTab
           )}
         </table>
       </div>
+
+      {showConfirm && (
+        <div 
+          id="confirm-modal-overlay"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+        >
+          <div 
+            id="confirm-modal-box"
+            className="bg-white rounded-2xl shadow-2xl border border-red-100 max-w-md w-full overflow-hidden animate-scale-up"
+          >
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-red-50 to-white px-5 py-4 border-b border-red-100 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[#ba191a]">
+                <AlertTriangle className="w-5 h-5 animate-bounce" />
+                <span className="font-extrabold text-sm md:text-base">ยืนยันการบันทึกรายงานขั้นสุดท้าย</span>
+              </div>
+              <button 
+                id="btn-confirm-modal-close"
+                onClick={() => setShowConfirm(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-full hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-4">
+              <div className="p-4 bg-red-50/50 border border-red-100 rounded-xl text-xs md:text-sm text-slate-700 space-y-2.5">
+                <div className="font-extrabold text-[#ba191a] flex items-center gap-1.5 text-sm">
+                  ⚠️ คำเตือนสำคัญสำหรับการดำเนินงาน
+                </div>
+                <p className="leading-relaxed font-bold text-slate-950 text-xs md:text-sm">
+                  หากดำเนินการบันทึกและยืนยันข้อมูลแล้ว จะไม่สามารถทำการแก้ไขหรือปรับปรุงข้อมูลประจำวันนี้ได้อีกต่อไป โปรดตรวจสอบความครบถ้วนและความถูกต้องของข้อมูลทั้งหมดอย่างละเอียดรอบคอบก่อนดำเนินงาน
+                </p>
+              </div>
+
+              <div className="text-[11.5px] font-bold text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100 flex justify-between items-center">
+                <span>จำนวนรายการสินค้าทั้งหมด:</span>
+                <span className="text-[#ba191a] font-black font-mono text-xs">{finalizedProducts?.length || 0} รายการ</span>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="bg-slate-50 px-5 py-4 border-t border-slate-150 flex items-center justify-end gap-2.5">
+              <button
+                id="btn-confirm-modal-cancel"
+                onClick={() => setShowConfirm(false)}
+                className="px-4 py-2 text-slate-600 hover:text-slate-800 bg-white hover:bg-slate-100 border border-slate-250 rounded-xl text-xs md:text-sm font-black transition-all cursor-pointer"
+              >
+                ยกเลิก / กลับไปตรวจสอบ
+              </button>
+              <button
+                id="btn-confirm-modal-approve"
+                onClick={() => {
+                  if (pendingType) {
+                    handleExportData(pendingType);
+                  }
+                  setShowConfirm(false);
+                }}
+                className="px-5 py-2 bg-[#ba191a] hover:bg-[#a11113] active:scale-95 text-white rounded-xl text-xs md:text-sm font-black transition-all shadow-md cursor-pointer flex items-center gap-1"
+              >
+                <Check className="w-4 h-4" />
+                <span>ตกลง, บันทึกและยืนยัน</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
