@@ -315,6 +315,23 @@ export default function App() {
     }
   };
 
+  const handleDeleteFinalizedProduct = (rIdx: number) => {
+    if (!finalizedProducts) return;
+    const nextList = finalizedProducts.filter((_, idx) => idx !== rIdx);
+    const updated = nextList.length > 0 ? nextList : null;
+    setFinalizedProducts(updated);
+    if (updated) {
+      localStorage.setItem('farmhouse_presale_finalized', JSON.stringify(updated));
+    } else {
+      localStorage.removeItem('farmhouse_presale_finalized');
+    }
+  };
+
+  const handleClearAllFinalizedProducts = () => {
+    setFinalizedProducts(null);
+    localStorage.removeItem('farmhouse_presale_finalized');
+  };
+
   // Custom confirmation dialog state bypassing sandboxed iframe window.confirm block
   const [confirmModal, setConfirmModal] = useState<{
     title: string;
@@ -695,7 +712,7 @@ export default function App() {
                 }`}
               >
                 <Users className="w-3.5 h-3.5" />
-                <span>จัดการผู้ใช้งาน ({users.length})</span>
+                <span>จัดการผู้ใช้ & สรุปงาน ({users.length})</span>
               </button>
             </div>
           )}
@@ -763,6 +780,10 @@ export default function App() {
               onAddUser={handleAddUser}
               onDeleteUser={handleDeleteUser}
               onUpdateUserPass={handleUpdateUserPass}
+              finalizedProducts={finalizedProducts}
+              onDeleteFinalizedProduct={handleDeleteFinalizedProduct}
+              onClearAllFinalizedProducts={handleClearAllFinalizedProducts}
+              triggerConfirm={triggerConfirm}
             />
           </div>
         ) : (
