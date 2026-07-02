@@ -28,6 +28,7 @@ interface PresaleTableProps {
   onSavePresale: () => void;
   onImportBaseProducts: (imported: Partial<Product>[]) => void;
   onResetAllData: () => void;
+  readOnly?: boolean;
 }
 
 export default function PresaleTable({
@@ -38,7 +39,8 @@ export default function PresaleTable({
   onUpdatePlusQtyDirectly,
   onSavePresale,
   onImportBaseProducts,
-  onResetAllData
+  onResetAllData,
+  readOnly = false
 }: PresaleTableProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<keyof Product | null>('code');
@@ -149,8 +151,13 @@ export default function PresaleTable({
 
           {/* Reset All Data button */}
           <button
+            disabled={readOnly}
             onClick={onResetAllData}
-            className="px-3 py-1.8 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 rounded text-xs font-bold flex items-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer"
+            className={`px-3 py-1.8 border text-xs font-bold flex items-center gap-1.5 transition-all ${
+              readOnly 
+                ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed shadow-none'
+                : 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-800 rounded active:scale-[0.98] cursor-pointer'
+            }`}
             title="รีเซ็ตข้อมูลสินค้าเพื่อดึงตารางกลับคืนมา"
           >
             <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
@@ -160,9 +167,9 @@ export default function PresaleTable({
           {/* Delete Selection button */}
           <button
             onClick={onDeleteSelected}
-            disabled={!products.some(p => p.selected)}
+            disabled={!products.some(p => p.selected) || readOnly}
             className={`px-3 py-1.8 border border-slate-200 rounded text-xs font-bold flex items-center gap-1.5 transition-all ${
-              products.some(p => p.selected)
+              products.some(p => p.selected) && !readOnly
                 ? 'bg-red-50 text-red-700 hover:bg-red-100/80 cursor-pointer active:scale-[0.98]'
                 : 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
             }`}
@@ -180,14 +187,7 @@ export default function PresaleTable({
             <ArrowUpDown className="w-4 h-4" />
           </button>
 
-          {/* Filter button */}
-          <button
-            onClick={() => setSearchQuery('')}
-            className="p-1.8 bg-white border border-slate-200 hover:border-slate-300 rounded text-slate-600 hover:text-slate-900 transition-colors"
-            title="ล้างคำค้นหา"
-          >
-            <ListFilter className="w-4 h-4" />
-          </button>
+
 
           {/* Excel export */}
           <button
@@ -198,57 +198,7 @@ export default function PresaleTable({
             <FileSpreadsheet className="w-4 h-4" />
           </button>
 
-          {/* Import Base products csv/excel */}
-          <div className="relative">
-            <button
-              onClick={() => document.getElementById('catalog-file-input')?.click()}
-              className="p-1.8 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded text-blue-700 font-black transition-all hover:scale-105 flex items-center justify-center cursor-pointer gap-1"
-              title="นำเข้าฐานรหัส/ราคาสินค้าหลักจากไฟล์ Excel/CSV (.csv)"
-            >
-              <Upload className="w-4 h-4" />
-              <span className="text-[10px] hidden md:inline">นำเข้าฐานราคาหลัก</span>
-            </button>
-            <input
-              type="file"
-              id="catalog-file-input"
-              className="hidden"
-              accept=".csv,.xlsx,.xls,.txt"
-              onChange={(e) => {
-                if (e.target.files && e.target.files[0]) {
-                  const file = e.target.files[0];
-                  const reader = new FileReader();
-                  reader.onload = (event) => {
-                    const text = event.target?.result as string;
-                    const lines = text.split("\n");
-                    const importedList: Partial<Product>[] = [];
-                    lines.forEach((line) => {
-                      const parts = line.split(/[;,]/);
-                      if (parts.length >= 2) {
-                        const code = parts[0].trim().replace(/["']/g, '');
-                        const name = parts[1] ? parts[1].trim().replace(/["']/g, '') : '';
-                        const bathStr = parts[2] ? parts[2].trim().replace(/["']/g, '') : '';
-                        const bath = parseFloat(bathStr);
-                        if (code && code.toLowerCase() !== 'item code' && code !== 'ITEM_CODE' && code !== 'ITEM CODE') {
-                          importedList.push({
-                            code,
-                            name: name || undefined,
-                            unitPrice: isNaN(bath) ? undefined : bath
-                          });
-                        }
-                      }
-                    });
-                    if (importedList.length > 0) {
-                      onImportBaseProducts(importedList);
-                      showNotification(`✓ นำเข้าเสร็จสิ้น! บันทึก/อัปเดตข้อมูลสินค้า ${importedList.length} รายการเรียบร้อย`);
-                    } else {
-                      showNotification("❌ โครงสร้างไฟล์ไม่ตรง แถวตัวอย่าง: 8850123110108,ชื่อสินค้า,ราคา");
-                    }
-                  };
-                  reader.readAsText(file);
-                }
-              }}
-            />
-          </div>
+
 
           {/* Print button */}
           <button
@@ -282,7 +232,10 @@ export default function PresaleTable({
               <th className="p-3.5 w-10 text-center">
                 <input
                   type="checkbox"
-                  className="rounded border-slate-300 text-red-600 focus:ring-red-500 h-3.5 w-3.5 cursor-pointer"
+                  disabled={readOnly}
+                  className={`rounded border-slate-300 text-red-600 h-3.5 w-3.5 ${
+                    readOnly ? 'cursor-not-allowed opacity-50' : 'focus:ring-red-500 cursor-pointer'
+                  }`}
                   checked={isAllChecked}
                   onChange={e => onToggleAllProducts(e.target.checked)}
                 />
@@ -326,7 +279,10 @@ export default function PresaleTable({
                     <td className="p-3 text-center">
                       <input
                         type="checkbox"
-                        className="rounded border-slate-300 text-red-600 focus:ring-red-500 h-3.5 w-3.5 cursor-pointer"
+                        disabled={readOnly}
+                        className={`rounded border-slate-300 text-red-600 h-3.5 w-3.5 ${
+                          readOnly ? 'cursor-not-allowed opacity-50' : 'focus:ring-red-500 cursor-pointer'
+                        }`}
                         checked={p.selected}
                         onChange={() => onToggleProduct(p.id)}
                       />
@@ -387,14 +343,14 @@ export default function PresaleTable({
       <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-center">
         <button
           onClick={triggerSave}
-          disabled={sortedAndFiltered.length === 0}
+          disabled={sortedAndFiltered.length === 0 || readOnly}
           className={`px-24 py-3 rounded-full font-bold text-base shadow-md transition-all uppercase tracking-wide ${
-            sortedAndFiltered.length === 0
+            sortedAndFiltered.length === 0 || readOnly
               ? 'bg-slate-300 text-slate-200 cursor-not-allowed shadow-none'
-              : 'bg-red-600 hover:bg-red-700 text-white hover:scale-[1.01] active:scale-[0.99] cursor-pointer'
+              : 'bg-[#ba191a] hover:bg-[#a01516] text-white hover:scale-[1.01] active:scale-[0.99] cursor-pointer'
           }`}
         >
-          บันทึกการทำงาน Presale
+          {readOnly ? '🔒 บันทึกและยืนยัน (โหมดรับชมรายงาน)' : 'บันทึกและยืนยัน'}
         </button>
       </div>
     </div>

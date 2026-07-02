@@ -44,8 +44,9 @@ export default function RecipeConfigPanel({
   filters,
   onSaveBatch,
   onClearFormula,
-  selectedCount
-}: RecipeConfigPanelProps) {
+  selectedCount,
+  readOnly = false
+}: RecipeConfigPanelProps & { readOnly?: boolean }) {
   const [startDate, setStartDate] = useState<string>('02/03/2026');
   const [endDate, setEndDate] = useState<string>('02/03/2026');
   const [mainValue, setMainValue] = useState<number>(20);
@@ -563,10 +564,15 @@ export default function RecipeConfigPanel({
             {/* บันทึกเข้าสู่ระบบ Button matching the mockup */}
             <button
               type="button"
+              disabled={readOnly}
               onClick={handleSaveToSystem}
-              className="w-full mt-4 py-2 border border-[#ba191a] hover:bg-neutral-50 bg-white text-slate-800 font-extrabold text-[13px] rounded-lg transition-all active:scale-[0.99] cursor-pointer flex items-center justify-center gap-1.5"
+              className={`w-full mt-4 py-2 border font-extrabold text-[13px] rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                readOnly 
+                  ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                  : 'hover:bg-neutral-50 bg-white text-slate-800 border-[#ba191a] cursor-pointer'
+              }`}
             >
-              บันทึกเข้าสู่ระบบ
+              {readOnly ? '🔒 ไม่อนุญาตให้แก้ไขข้อมูล' : 'บันทึกเข้าสู่ระบบ'}
             </button>
           </div>
 
@@ -968,14 +974,17 @@ export default function RecipeConfigPanel({
           {/* บันทึกเข้าสู่ระบบ Action button centered inside Left Card */}
           <button
             type="button"
+            disabled={readOnly}
             onClick={handleSaveToSystem}
-            className={`w-full mt-6 py-3 border rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm transition-all focus:outline-none cursor-pointer flex items-center justify-center gap-1.5 ${
-              hasCalculated 
-                ? 'bg-[#ba191a] hover:bg-[#941014] text-white border-[#ba191a] shadow-inner font-extrabold animate-pulse'
-                : 'bg-white hover:bg-red-50/50 text-[#ba191a] border-[#ba191a]'
+            className={`w-full mt-6 py-3 border rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm transition-all focus:outline-none flex items-center justify-center gap-1.5 ${
+              readOnly
+                ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                : hasCalculated 
+                  ? 'bg-[#ba191a] hover:bg-[#941014] text-white border-[#ba191a] shadow-inner font-extrabold animate-pulse cursor-pointer'
+                  : 'bg-white hover:bg-red-50/50 text-[#ba191a] border-[#ba191a] cursor-pointer'
             }`}
           >
-            {hasCalculated ? '✓ ได้ข้อมูลแล้ว กดบันทึกเข้าบอร์ด' : 'บันทึกเข้าสู่ระบบ'}
+            {readOnly ? '🔒 ไม่อนุญาตให้แก้ไขข้อมูล (Read-Only)' : hasCalculated ? '✓ ได้ข้อมูลแล้ว กดบันทึกเข้าบอร์ด' : 'บันทึกเข้าสู่ระบบ'}
           </button>
         </div>
 

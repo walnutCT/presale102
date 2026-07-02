@@ -324,3 +324,14 @@ export const INITIAL_DAILY_DATA: DailyCardData[] = [
     selectedCustomerGroups: ['10', '20'],
   },
 ];
+
+export const INITIAL_USERS = [
+  { username: 'Admin', pass: '1234', level: 1, roleName: 'Admin', description: 'ดูแลระบบทั้งหมด จัดการ User ทุกคน' },
+  { username: 'M-2', pass: '1234', level: 2, roleName: 'Manager', description: 'อนุมัติสูตร, คำนวณสูตร, บันทึกยอด' },
+  { username: 'S-2', pass: '1234', level: 2, roleName: 'Manager', description: 'อนุมัติสูตร, คำนวณสูตร, บันทึกยอด' },
+  { username: 'M-3', pass: '1234', level: 3, roleName: 'Staff', description: 'คำนวณสูตร, บันทึกยอด' },
+  { username: 'S-3', pass: '1234', level: 3, roleName: 'Staff', description: 'คำนวณสูตร, บันทึกยอด' },
+  { username: 'M-4', pass: '1234', level: 4, roleName: 'Viewer', description: 'ดูรายงานอย่างเดียว แก้ไขไม่ได้' },
+  { username: 'S-4', pass: '1234', level: 4, roleName: 'Viewer', description: 'ดูรายงานอย่างเดียว แก้ไขไม่ได้' }
+];
+

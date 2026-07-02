@@ -1,9 +1,11 @@
 import * as React from 'react';
 import { useState } from 'react';
-import { User, Lock, AlertCircle, ShieldAlert, X, Phone, Mail, Clock } from 'lucide-react';
+import { User as UserIcon, Lock, AlertCircle, ShieldAlert, X, Phone, Mail, Clock } from 'lucide-react';
+import { User } from '../types';
+import { INITIAL_USERS } from '../data';
 
 interface LoginPageProps {
-  onLoginSuccess: (username: string) => void;
+  onLoginSuccess: (user: User) => void;
 }
 
 export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
@@ -28,14 +30,31 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
     // Simulate small latency for clean user experience feedback
     setTimeout(() => {
-      if (trimmedUser === 'admin' && password === '1234') {
-        onLoginSuccess(trimmedUser);
+      // Load current users list from localStorage or fall back to static list
+      let usersList: User[] = INITIAL_USERS as User[];
+      const storedUsers = localStorage.getItem('farmhouse_users');
+      if (storedUsers) {
+        try {
+          usersList = JSON.parse(storedUsers);
+        } catch (err) {
+          // fallback
+        }
+      }
+
+      // Find user (case-insensitive)
+      const matchedUser = usersList.find(
+        u => u.username.toLowerCase() === trimmedUser.toLowerCase()
+      );
+
+      if (matchedUser && matchedUser.pass === password) {
+        onLoginSuccess(matchedUser);
       } else {
         setError('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
         setIsLoading(false);
       }
     }, 600);
   };
+
 
   const handleForgotPassword = () => {
     setShowForgotModal(true);
@@ -112,7 +131,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           {/* Username Input Container */}
           <div className="relative flex items-center transition-all">
             <span className="absolute left-4 z-10">
-              <User className="w-5 h-5 text-white/90" />
+              <UserIcon className="w-5 h-5 text-white/90" />
             </span>
             <input
               type="text"
@@ -224,7 +243,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 </span>
                 
                 <div className="flex items-center gap-2 text-xs text-slate-600">
-                  <User className="w-4 h-4 text-[#ba191a] shrink-0" />
+                  <UserIcon className="w-4 h-4 text-[#ba191a] shrink-0" />
                   <div>
                     <span className="font-extrabold">เจ้าหน้าที่ผู้รับผิดชอบ:</span> คุณพินิจนันท์ เปรมปรีดิ์ (ผู้จัดการส่วนเกิน)
                   </div>

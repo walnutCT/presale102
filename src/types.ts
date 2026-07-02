@@ -51,3 +51,12 @@ export type FormulaType =
   | 'reduce_min_1'
   | 'reset_zero'
   | 'upload_file';
+
+export interface User {
+  username: string;
+  pass: string;
+  level: number;
+  roleName: 'Admin' | 'Manager' | 'Staff' | 'Viewer';
+  description: string;
+}
+

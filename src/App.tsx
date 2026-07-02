@@ -15,7 +15,12 @@ import {
   Info,
   Sliders,
   CheckCircle,
-  Clock
+  Clock,
+  Users,
+  Shield,
+  Trash2,
+  Plus,
+  UserCheck
 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import RecipeConfigPanel from './components/RecipeConfigPanel';
@@ -24,8 +29,9 @@ import DailyCards from './components/DailyCards';
 import FinalSummaryTable from './components/FinalSummaryTable';
 import FarmhouseLogo from './components/FarmhouseLogo';
 import LoginPage from './components/LoginPage';
-import { Product, StoreFilterState, DailyCardData, FormulaType } from './types';
-import { INITIAL_PRODUCTS, INITIAL_DAILY_DATA, CATEGORY_DEFINITIONS } from './data';
+import UserManagement from './components/UserManagement';
+import { Product, StoreFilterState, DailyCardData, FormulaType, User } from './types';
+import { INITIAL_PRODUCTS, INITIAL_DAILY_DATA, CATEGORY_DEFINITIONS, INITIAL_USERS } from './data';
 
 export default function App() {
   // Products management state
@@ -70,6 +76,81 @@ export default function App() {
   // Active recipes formula selection
   const [selectedFormula, setSelectedFormula] = useState<FormulaType | null>(null);
 
+  // Active Work Date
+  const [currentDate, setCurrentDate] = useState<string>(() => {
+    const todayStr = (() => {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    })();
+    return localStorage.getItem('farmhouse_current_date') || todayStr;
+  });
+
+  // Automated "New Day Detection and System Reset"
+  useEffect(() => {
+    const todayStr = (() => {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    })();
+
+    const storedDate = localStorage.getItem('farmhouse_current_date');
+    if (storedDate && storedDate !== todayStr) {
+      // Auto-reset everything for the new day
+      setCurrentDate(todayStr);
+      localStorage.setItem('farmhouse_current_date', todayStr);
+
+      setProducts(INITIAL_PRODUCTS);
+      localStorage.setItem('farmhouse_presale_products_v3', JSON.stringify(INITIAL_PRODUCTS));
+
+      setFinalizedProducts(null);
+      localStorage.removeItem('farmhouse_presale_finalized_products');
+      localStorage.removeItem('farmhouse_presale_finalized');
+
+      setIsFormulaApproved(false);
+      localStorage.setItem('farmhouse_formula_approved', 'false');
+
+      setSelectedFormula(null);
+    } else if (!storedDate) {
+      localStorage.setItem('farmhouse_current_date', todayStr);
+    }
+  }, []);
+
+  const formatThaiDate = (dateStr: string) => {
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const year = parseInt(parts[0]) + 543; // Buddhist Era
+        const monthNames = [
+          'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+          'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+        ];
+        const monthIndex = parseInt(parts[1]) - 1;
+        const day = parseInt(parts[2]);
+        return `วันส่งสินค้า: ${day} ${monthNames[monthIndex]} ${year}`;
+      }
+    } catch (e) {
+      // fallback
+    }
+    return `วันส่งสินค้า: ${dateStr}`;
+  };
+
+  const formatDDMMYYYY = (dateStr: string) => {
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return dateStr;
+  };
+
   // Reference to main scroll container to bounce view back up automatically
   const mainRef = useRef<HTMLElement | null>(null);
 
@@ -90,6 +171,11 @@ export default function App() {
     localStorage.setItem('farmhouse_presale_products_v3', JSON.stringify(products));
   }, [products]);
 
+  const productsWithCurrentDate = products.map(p => ({
+    ...p,
+    delDate: formatDDMMYYYY(currentDate)
+  }));
+
   useEffect(() => {
     if (finalizedProducts) {
       localStorage.setItem('farmhouse_presale_finalized', JSON.stringify(finalizedProducts));
@@ -98,14 +184,85 @@ export default function App() {
     }
   }, [finalizedProducts]);
 
+  // User Accounts list state (persisted in localStorage)
+  const [users, setUsers] = useState<User[]>(() => {
+    const cached = localStorage.getItem('farmhouse_users');
+    if (cached) {
+      try {
+        return JSON.parse(cached) as User[];
+      } catch (e) {
+        return INITIAL_USERS as User[];
+      }
+    }
+    localStorage.setItem('farmhouse_users', JSON.stringify(INITIAL_USERS));
+    return INITIAL_USERS as User[];
+  });
+
   // Authentication access control state (Session-scoped for excellent UX)
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     return sessionStorage.getItem('farmhouse_logged_in') === 'true';
   });
 
-  const [loggedInUser, setLoggedInUser] = useState<string>(() => {
-    return sessionStorage.getItem('farmhouse_username') || '';
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const cached = sessionStorage.getItem('farmhouse_current_user');
+    if (cached) {
+      try {
+        return JSON.parse(cached) as User;
+      } catch (e) {
+        return null;
+      }
+    }
+    // Backward compatibility fallback
+    if (sessionStorage.getItem('farmhouse_logged_in') === 'true') {
+      const uname = sessionStorage.getItem('farmhouse_username') || 'Admin';
+      return {
+        username: uname,
+        pass: '1234',
+        level: uname.toLowerCase() === 'admin' ? 1 : 2,
+        roleName: uname.toLowerCase() === 'admin' ? 'Admin' : 'Manager',
+        description: ''
+      };
+    }
+    return null;
   });
+
+  // Formula Approval State ("อนุมัติสูตร" duty for Manager and Admin)
+  const [isFormulaApproved, setIsFormulaApproved] = useState<boolean>(() => {
+    return localStorage.getItem('farmhouse_formula_approved') === 'true';
+  });
+
+  const handleApproveFormula = (approved: boolean) => {
+    setIsFormulaApproved(approved);
+    localStorage.setItem('farmhouse_formula_approved', String(approved));
+  };
+
+  // Tab navigation state for Admin (Level 1) view switching
+  const [activeTab, setActiveTab] = useState<'presale' | 'users'>('presale');
+
+  const handleAddUser = (newUser: User) => {
+    const nextUsers = [...users, newUser];
+    setUsers(nextUsers);
+    localStorage.setItem('farmhouse_users', JSON.stringify(nextUsers));
+  };
+
+  const handleDeleteUser = (username: string) => {
+    const nextUsers = users.filter(u => u.username !== username);
+    setUsers(nextUsers);
+    localStorage.setItem('farmhouse_users', JSON.stringify(nextUsers));
+  };
+
+  const handleUpdateUserPass = (username: string, newPass: string) => {
+    const nextUsers = users.map(u => u.username === username ? { ...u, pass: newPass } : u);
+    setUsers(nextUsers);
+    localStorage.setItem('farmhouse_users', JSON.stringify(nextUsers));
+    
+    // Update currently logged in profile cache if matches
+    if (currentUser && currentUser.username === username) {
+      const updatedUser = { ...currentUser, pass: newPass };
+      setCurrentUser(updatedUser);
+      sessionStorage.setItem('farmhouse_current_user', JSON.stringify(updatedUser));
+    }
+  };
 
   // Custom confirmation dialog state bypassing sandboxed iframe window.confirm block
   const [confirmModal, setConfirmModal] = useState<{
@@ -215,8 +372,65 @@ export default function App() {
 
   // Save/Finalize active workbook changes to final table
   const handleSavePresale = () => {
-    // Clone active products list into finalized state
-    setFinalizedProducts([...products]);
+    if (currentUser?.level === 4) {
+      triggerConfirm(
+        "บันทึกข้อมูลแผนงาน Presale",
+        "คุณต้องการบันทึกข้อมูลและผลลัพธ์การคำนวณทั้งหมดของตารางด้านบนใช่หรือไม่? (คุณยังคงสามารถแก้ไขและคำนวณข้อมูลต่อได้)",
+        () => {
+          // Edits are automatically saved to localStorage in the useEffect when `products` changes, 
+          // so we just provide a reassurance notification that the state is recorded.
+        }
+      );
+      return;
+    }
+
+    // Level 1, 2, and 3 can finalize/lock the system for the day
+    triggerConfirm(
+      "บันทึกและยืนยันข้อมูลสรุป",
+      "ถ้ากดยืนยันแล้วจะไม่สามารถแก้ไขข้อมูลวันนี้ได้อีกแล้ว กรุณาตรวจสอบข้อมูลให้แน่ใจ",
+      () => {
+        const datedProducts = products.map(p => ({
+          ...p,
+          delDate: formatDDMMYYYY(currentDate)
+        }));
+        setFinalizedProducts(datedProducts);
+        // Also save to localStorage
+        localStorage.setItem('farmhouse_presale_finalized_products', JSON.stringify(datedProducts));
+      }
+    );
+  };
+
+  // Next Day handler that resets the entire system for a fresh start
+  const handleNextDay = () => {
+    triggerConfirm(
+      "ยืนยันขึ้นวันใหม่",
+      "คุณต้องการปิดรอบวันนี้และเริ่มงานสำหรับวันใหม่ใช่หรือไม่? ระบบจะทำการรีเซ็ตข้อมูลและแผนงานพรีเซลล์ของวันนี้กลับเป็นค่าเริ่มต้น เพื่อเตรียมคำนวณของวันถัดไป",
+      () => {
+        // Increment the date by 1 day
+        const d = new Date(currentDate);
+        d.setDate(d.getDate() + 1);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const nextDateStr = `${yyyy}-${mm}-${dd}`;
+
+        setCurrentDate(nextDateStr);
+        localStorage.setItem('farmhouse_current_date', nextDateStr);
+
+        // Reset everything for the new day
+        setProducts(INITIAL_PRODUCTS);
+        localStorage.setItem('farmhouse_presale_products_v3', JSON.stringify(INITIAL_PRODUCTS));
+
+        setFinalizedProducts(null);
+        localStorage.removeItem('farmhouse_presale_finalized_products');
+        localStorage.removeItem('farmhouse_presale_finalized');
+
+        setIsFormulaApproved(false);
+        localStorage.setItem('farmhouse_formula_approved', 'false');
+
+        setSelectedFormula(null);
+      }
+    );
   };
 
   // Clear/Reset entire board state to default templates
@@ -326,13 +540,29 @@ export default function App() {
       <LoginPage
         onLoginSuccess={(user) => {
           setIsLoggedIn(true);
-          setLoggedInUser(user);
+          setCurrentUser(user);
           sessionStorage.setItem('farmhouse_logged_in', 'true');
-          sessionStorage.setItem('farmhouse_username', user);
+          sessionStorage.setItem('farmhouse_username', user.username);
+          sessionStorage.setItem('farmhouse_current_user', JSON.stringify(user));
         }}
       />
     );
   }
+
+  // Get color configurations for header badge based on level
+  const getHeaderBadgeClasses = (level: number) => {
+    switch (level) {
+      case 1:
+        return 'bg-[#ffd966] text-[#7f6000] border border-[#f1c232]';
+      case 2:
+        return 'bg-[#9fc5e8] text-[#0b5394] border border-[#6fa8dc]';
+      case 3:
+        return 'bg-[#b6d7a8] text-[#274e13] border border-[#93c47d]';
+      case 4:
+      default:
+        return 'bg-[#f9cb9c] text-[#783f04] border border-[#e06666]';
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-800">
@@ -342,12 +572,47 @@ export default function App() {
         <div className="flex items-center gap-6">
           {/* Authentic Farmhouse Brand Logo matching specification */}
           <FarmhouseLogo />
+
+          {/* Tab Navigation for Admin (Level 1) */}
+          {currentUser?.level === 1 && (
+            <div className="hidden md:flex bg-[#a01516] p-1 rounded-xl border border-red-500/30 gap-1.5 ml-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('presale')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'presale' 
+                    ? 'bg-white text-[#ba191a] shadow-sm' 
+                    : 'text-white hover:bg-white/10'
+                }`}
+              >
+                <Database className="w-3.5 h-3.5" />
+                <span>คำนวณสูตรพรีเซลล์</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('users')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'users' 
+                    ? 'bg-white text-[#ba191a] shadow-sm' 
+                    : 'text-white hover:bg-white/10'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>จัดการผู้ใช้งาน ({users.length})</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* User profile with dropdown logout function */}
         <div className="flex items-center gap-3">
           <div className="text-right hidden sm:block">
-            <div className="text-xs font-bold text-slate-100 font-sans tracking-wide uppercase">{loggedInUser || 'admin'}</div>
+            <div className="flex items-center gap-1.5 justify-end">
+              <span className="text-xs font-black text-white font-sans tracking-wide uppercase">
+                {currentUser?.username || 'admin'}
+              </span>
+              {/* Role/Level badge removed per user request */}
+            </div>
             <button
               onClick={() => {
                 triggerConfirm(
@@ -355,9 +620,10 @@ export default function App() {
                   "คุณต้องการออกจากระบบจากโปรแกรมคำนวณ Presale ฟาร์มเฮ้าส์ใช่หรือไม่?",
                   () => {
                     setIsLoggedIn(false);
-                    setLoggedInUser('');
+                    setCurrentUser(null);
                     sessionStorage.removeItem('farmhouse_logged_in');
                     sessionStorage.removeItem('farmhouse_username');
+                    sessionStorage.removeItem('farmhouse_current_user');
                   }
                 );
               }}
@@ -373,87 +639,210 @@ export default function App() {
                 "คุณต้องการออกจากระบบจากโปรแกรมคำนวณ Presale ฟาร์มเฮ้าส์ใช่หรือไม่?",
                 () => {
                   setIsLoggedIn(false);
-                  setLoggedInUser('');
+                  setCurrentUser(null);
                   sessionStorage.removeItem('farmhouse_logged_in');
                   sessionStorage.removeItem('farmhouse_username');
+                  sessionStorage.removeItem('farmhouse_current_user');
                 }
               );
             }}
             title="คลิกเพื่อออกจากระบบ"
             className="relative cursor-pointer group"
           >
-            <div className="h-9 w-9 rounded-full bg-orange-400 text-white flex items-center justify-center font-black border-2 border-white/60 shadow-md group-hover:scale-105 transition-all">
-              {(loggedInUser || 'admin').slice(0, 2).toUpperCase()}
+            <div className="h-9 w-9 rounded-full bg-amber-500 text-white flex items-center justify-center font-black border-2 border-white/60 shadow-md group-hover:scale-105 transition-all uppercase font-sans text-xs">
+              {(currentUser?.username || 'AD').slice(0, 2)}
             </div>
-            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 bg-emerald-500 rounded-full border-2 border-red-600 shadow-sm animate-pulse"></span>
+            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 bg-emerald-500 rounded-full border-2 border-[#ba191a] shadow-sm animate-pulse"></span>
           </div>
         </div>
       </header>
 
       {/* THREE PANELS LAYOUT CONTAINER */}
       <div className="flex grow overflow-hidden">
-        
-        {/* LEFT COLUMN: CONTROL AND SELECTION SLIDERS */}
-        <Sidebar
-          products={products}
-          filters={filters}
-          onChangeFilters={setFilters}
-          onSelectFormula={setSelectedFormula}
-          selectedCount={selectedCount}
-          onToggleProduct={handleToggleProduct}
-          onToggleAllProducts={handleToggleAllProducts}
-        />
-
-        {/* MIDDLE/RIGHT EXPANSIVE SPACE */}
-        <main ref={mainRef} className="flex-1 p-6 space-y-6 overflow-y-auto h-[calc(100vh-64px)] bg-[#f7f9fa] pb-16">
-          
-          {/* DYNAMIC FORMULA CONFIG BANNER */}
-          <RecipeConfigPanel
-            selectedFormula={selectedFormula}
-            products={products}
-            filters={filters}
-            onSaveBatch={(updatedProducts) => {
-              setProducts(updatedProducts);
-            }}
-            onClearFormula={() => setSelectedFormula(null)}
-            selectedCount={selectedCount}
-          />
-
-          {/* CENTRAL ACTION WORKBOOK TABLE */}
-          <PresaleTable
-            products={products}
-            onToggleProduct={handleToggleProduct}
-            onToggleAllProducts={handleToggleAllProducts}
-            onDeleteSelected={handleDeleteSelected}
-            onUpdatePlusQtyDirectly={handleUpdatePlusQtyDirectly}
-            onSavePresale={handleSavePresale}
-            onImportBaseProducts={handleImportBaseProducts}
-            onResetAllData={handleResetEntireBoard}
-          />
-
-          {/* DAILY TILES DISPLAYING OUTCOMES COMPARED */}
-          <div className="my-6">
-            <div className="flex items-center gap-2 mb-3">
-              <Database className="w-4.5 h-4.5 text-[#ba191a]" />
-              <h3 className="font-extrabold text-[#ba191a] text-sm uppercase tracking-wider">
-                วิเคราะห์ประมาณการจัดส่งประประจำวัน (Daily Dispatch Forecasts)
-              </h3>
-            </div>
-            <DailyCards
-              dailyData={dailyData}
-              onToggleCustomerGroupForDay={handleToggleCustomerGroupForDay}
-              onSetAllCustomerGroupsForDay={handleSetAllCustomerGroupsForDay}
-              totalPriceAmt={totalPriceAmt}
-              totalOverrideQty={totalOverrideQty}
+        {activeTab === 'users' && currentUser?.level === 1 ? (
+          <div className="flex-1 p-6 overflow-y-auto h-[calc(100vh-64px)] bg-[#f7f9fa]">
+            <UserManagement
+              users={users}
+              onAddUser={handleAddUser}
+              onDeleteUser={handleDeleteUser}
+              onUpdateUserPass={handleUpdateUserPass}
             />
           </div>
+        ) : (
+          <>
+            {/* LEFT COLUMN: CONTROL AND SELECTION SLIDERS */}
+            <Sidebar
+              products={productsWithCurrentDate}
+              filters={filters}
+              onChangeFilters={setFilters}
+              onSelectFormula={setSelectedFormula}
+              selectedCount={selectedCount}
+              onToggleProduct={handleToggleProduct}
+              onToggleAllProducts={handleToggleAllProducts}
+            />
 
-          {/* FINAL SUMMARY REPORT TABLE (REVEALED AND PERSISTENT ON SAVE) */}
-          <div className="pt-4 border-t border-slate-200">
-            <FinalSummaryTable finalizedProducts={finalizedProducts} />
-          </div>
+            {/* MIDDLE/RIGHT EXPANSIVE SPACE */}
+            <main ref={mainRef} className="flex-1 p-6 space-y-6 overflow-y-auto h-[calc(100vh-64px)] bg-[#f7f9fa] pb-16">
+              
+              {/* CURRENT DATE & SESSION CONTROLLER BAR */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-[#ba191a]/10 rounded-xl text-[#ba191a]">
+                    <Clock className="w-5 h-5 shrink-0" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-slate-800 text-xs md:text-sm">วันที่ปฏิบัติงานพรีเซลล์หลัก (System Work Date)</span>
+                      {finalizedProducts !== null ? (
+                        <span className="text-[10px] bg-emerald-100 border border-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full font-black flex items-center gap-1 animate-fade-in">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          ยืนยันแล้ว
+                        </span>
+                      ) : (
+                        <span className="text-[10px] bg-rose-100 border border-rose-200 text-rose-800 px-2 py-0.5 rounded-full font-black flex items-center gap-1 animate-fade-in">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                          ยังไม่ได้รับการยืนยัน
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-slate-950 font-black text-sm md:text-base mt-0.5">
+                      {formatThaiDate(currentDate)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Viewer (Level 4) Banner if active */}
+              {currentUser?.level === 4 && (
+                <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-fade-in">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-orange-100 rounded-xl text-orange-700">
+                      <Clock className="w-5 h-5 shrink-0" />
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-slate-800 text-sm">โหมดรับชมรายงานเท่านั้น (Read-Only Viewer Mode)</h4>
+                      <p className="text-slate-500 font-bold text-xs">คุณเข้าสู่ระบบในสิทธิ์ผู้เข้าชม (Level 4) สามารถดูสรุปและวิเคราะห์รายงานได้ แต่ไม่สามารถแก้ไขข้อมูลหรือคำนวณสูตรได้</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] bg-orange-200 text-orange-800 px-3 py-1 rounded-full font-black uppercase">Viewer Profile</span>
+                </div>
+              )}
 
-        </main>
+              {/* Session status banner (Dynamic color based on finalizedProducts status) */}
+              {finalizedProducts !== null ? (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-emerald-100 rounded-xl text-emerald-700">
+                      <Shield className="w-5 h-5 shrink-0" />
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-slate-800 text-sm">ยืนยันและสรุปข้อมูลวันปัจจุบันเรียบร้อยแล้ว (Locked Today's Session)</h4>
+                      <p className="text-slate-500 font-bold text-xs">
+                        {currentUser?.level === 1 
+                          ? "แผนงาน Presale วันนี้ถูกบันทึกเรียบร้อยแล้ว แต่เนื่องจากคุณเป็น Admin คุณจึงยังมีสิทธิ์แก้ไขข้อมูลและอนุมัติสูตรได้ หรือปลดล็อกเพื่อให้เจ้าหน้าที่คนอื่นแก้ไขได้" 
+                          : "แผนงาน Presale วันนี้ถูกบันทึกและส่งยันข้อมูลสรุปขั้นสุดท้ายเรียบร้อยแล้ว บอร์ดระบบอยู่ในสถานะฟรีซข้อมูล (Locked) ไม่สามารถทำการปรับเปลี่ยนใดๆ เพิ่มเติมได้ในขณะนี้"
+                        }
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {currentUser?.level === 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          triggerConfirm(
+                            "ปลดล็อกวันนี้",
+                            "คุณต้องการปลดล็อกข้อมูลเพื่อให้ทุกคนแก้ไขได้อีกครั้งใช่หรือไม่?",
+                            () => {
+                              setFinalizedProducts(null);
+                              localStorage.removeItem('farmhouse_presale_finalized_products');
+                            }
+                          );
+                        }}
+                        className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase rounded-xl shadow transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+                      >
+                        <span>🔓 ปลดล็อกระบบ (Admin)</span>
+                      </button>
+                    )}
+                    <span className="text-[10px] bg-emerald-200 text-emerald-800 px-3 py-1.5 rounded-full font-black uppercase shrink-0">Data Locked</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-rose-100 rounded-xl text-rose-600 animate-pulse">
+                      <Clock className="w-5 h-5 shrink-0" />
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-slate-800 text-sm">ยังไม่ได้รับการยืนยันและสรุปข้อมูล (Pending Daily Finalization)</h4>
+                      <p className="text-slate-500 font-bold text-xs">
+                        แผนงาน Presale ประจำวันนี้ยังไม่ได้กดยืนยันจัดทำรายงานสรุปขั้นสุดท้าย คุณยังคงแก้ไขสูตรและแผนงานคำนวณด้านบนได้ เมื่อเรียบร้อยแล้ว กรุณากดปุ่ม "บันทึกและยืนยัน (XLSX)" ด้านล่างสุดเพื่อส่งรายงาน
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] bg-rose-200 text-rose-800 px-3 py-1.5 rounded-full font-black uppercase shrink-0">ยังไม่ได้รับการยืนยัน</span>
+                  </div>
+                </div>
+              )}
+
+              {/* DYNAMIC FORMULA CONFIG BANNER */}
+              <RecipeConfigPanel
+                selectedFormula={selectedFormula}
+                products={productsWithCurrentDate}
+                filters={filters}
+                onSaveBatch={(updatedProducts) => {
+                  setProducts(updatedProducts);
+                }}
+                onClearFormula={() => setSelectedFormula(null)}
+                selectedCount={selectedCount}
+                readOnly={currentUser?.level === 4 || (finalizedProducts !== null && currentUser?.level !== 1 && currentUser?.level !== 2 && currentUser?.level !== 3)}
+              />
+
+              {/* CENTRAL ACTION WORKBOOK TABLE */}
+              <PresaleTable
+                products={productsWithCurrentDate}
+                onToggleProduct={handleToggleProduct}
+                onToggleAllProducts={handleToggleAllProducts}
+                onDeleteSelected={handleDeleteSelected}
+                onUpdatePlusQtyDirectly={handleUpdatePlusQtyDirectly}
+                onSavePresale={handleSavePresale}
+                onImportBaseProducts={handleImportBaseProducts}
+                onResetAllData={handleResetEntireBoard}
+                readOnly={currentUser?.level === 4 || (finalizedProducts !== null && currentUser?.level !== 1 && currentUser?.level !== 2 && currentUser?.level !== 3)}
+              />
+
+              {/* DAILY TILES DISPLAYING OUTCOMES COMPARED */}
+              <div className="my-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Database className="w-4.5 h-4.5 text-[#ba191a]" />
+                  <h3 className="font-extrabold text-[#ba191a] text-sm uppercase tracking-wider">
+                    วิเคราะห์ประมาณการจัดส่งประประจำวัน (Daily Dispatch Forecasts)
+                  </h3>
+                </div>
+                <DailyCards
+                  dailyData={dailyData}
+                  onToggleCustomerGroupForDay={handleToggleCustomerGroupForDay}
+                  onSetAllCustomerGroupsForDay={handleSetAllCustomerGroupsForDay}
+                  totalPriceAmt={totalPriceAmt}
+                  totalOverrideQty={totalOverrideQty}
+                />
+              </div>
+
+              {/* FINAL SUMMARY REPORT TABLE (REVEALED AND PERSISTENT ON SAVE) */}
+              <div className="pt-4 border-t border-slate-200">
+                <FinalSummaryTable 
+                  finalizedProducts={finalizedProducts}
+                  isFormulaApproved={isFormulaApproved}
+                  onApproveFormula={handleApproveFormula}
+                  currentUser={currentUser}
+                  triggerConfirm={triggerConfirm}
+                />
+              </div>
+
+            </main>
+          </>
+        )}
       </div>
 
       {/* CUSTOM CONFIRMATION DIALOG BYPASSING IFRAME WINDOW.CONFIRM SECURITY BLOCKS */}

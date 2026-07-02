@@ -10,10 +10,20 @@ import * as XLSX from 'xlsx';
 
 interface FinalSummaryTableProps {
   finalizedProducts: Product[] | null;
+  isFormulaApproved: boolean;
+  onApproveFormula: (approved: boolean) => void;
+  currentUser: any;
+  triggerConfirm: (title: string, message: string, onConfirm: () => void) => void;
 }
 
-export default function FinalSummaryTable({ finalizedProducts }: FinalSummaryTableProps) {
-  const [showConfirm, setShowConfirm] = useState(false);
+export default function FinalSummaryTable({ 
+  finalizedProducts,
+  isFormulaApproved,
+  onApproveFormula,
+  currentUser,
+  triggerConfirm
+}: FinalSummaryTableProps) {
+  const [showApproveConfirm, setShowApproveConfirm] = useState(false);
   const [pendingType, setPendingType] = useState<'csv' | 'xlsx' | null>(null);
 
   if (!finalizedProducts) {
@@ -28,7 +38,7 @@ export default function FinalSummaryTable({ finalizedProducts }: FinalSummaryTab
             ตารางส่วนนี้คือรายงานผลลัพธ์ที่จะถูก <span className="text-emerald-600 font-bold">Import (นำเข้าความถูกต้อง)</span> มาโดยตรงจากตารางหลักด้านบน หลังจากผ่านการคำนวณด้วยสูตรคณิตศาสตร์ปรับยอดเรียบร้อยแล้ว
           </p>
           <p className="text-slate-400 text-[11px] bg-slate-50 border border-slate-100 p-2 rounded-md mt-1 leading-relaxed">
-             กรุณากดปุ่ม <span className="font-bold text-[#ba191a] underline">"บันทึกการทำงาน Presale"</span> ในตารางคำนวณด้านบนเพื่อยืนยันเพื่อนำเข้าตารางสรุปนี้
+             กรุณากดปุ่ม <span className="font-bold text-[#ba191a] underline">"บันทึกและยืนยัน"</span> ในตารางคำนวณด้านบนเพื่อนำเข้าตารางสรุปนี้
           </p>
         </div>
       </div>
@@ -137,34 +147,84 @@ export default function FinalSummaryTable({ finalizedProducts }: FinalSummaryTab
           <h2 className="font-extrabold text-[#ba191a] text-base uppercase tracking-tight">
             ตารางสรุปการทำงาน Presale (Final)
           </h2>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider ${isFormulaApproved ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-150 text-amber-800'}`}>
+            {isFormulaApproved ? 'อนุมัติสูตรแล้ว (Approved)' : 'รออนุมัติ (Pending Approval)'}
+          </span>
         </div>
         
         <div className="flex flex-wrap items-center gap-2">
           <div className="text-[11px] text-slate-400 font-medium font-mono mr-1 hidden lg:block">
             บันทึกรายงานสรุปเมื่อ: {new Date().toLocaleTimeString()}
           </div>
-          <button
-            id="btn-final-summary-confirm-xlsx"
-            onClick={() => {
-              setPendingType('xlsx');
-              setShowConfirm(true);
-            }}
-            className="px-3.5 py-1.5 bg-[#ba191a] hover:bg-[#a11113] active:scale-[0.98] text-white text-[12px] font-black rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <Download className="w-4 h-4" />
-            <span>บันทึกและยืนยัน</span>
-          </button>
-          <button
-            id="btn-final-summary-confirm-csv"
-            onClick={() => {
-              setPendingType('csv');
-              setShowConfirm(true);
-            }}
-            className="px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-250 active:scale-[0.98] text-slate-700 text-[12px] font-black rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            <span>ส่งออก CSV</span>
-          </button>
+          {currentUser && currentUser.level <= 3 && (
+            <button
+              id="btn-final-summary-confirm-csv"
+              onClick={() => {
+                triggerConfirm(
+                  "ดาวน์โหลดรายงานสรุป (CSV)",
+                  "คุณต้องการจัดทำและดาวน์โหลดไฟล์รายงานสรุปขั้นสุดท้ายในรูปแบบ CSV ใช่หรือไม่?",
+                  () => {
+                    handleExportData('csv');
+                  }
+                );
+              }}
+              className="px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-250 active:scale-[0.98] text-slate-700 text-[12px] font-black rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+              <span>ส่งออก CSV</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* INTEGRATED ACTION BAR: COMBINED FORMULA APPROVAL & SUMMARY REPORT CONFIRM */}
+      <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-xl shrink-0 ${isFormulaApproved ? 'bg-emerald-50 text-emerald-700 border border-emerald-150' : 'bg-amber-50 text-amber-800 border border-amber-150'}`}>
+            <CheckSquare className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-slate-800 text-xs md:text-sm">สถานะการอนุมัติสูตรสำหรับวันนี้</span>
+              <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider ${isFormulaApproved ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-850'}`}>
+                {isFormulaApproved ? 'อนุมัติแล้ว (Approved)' : 'รอการอนุมัติ (Pending)'}
+              </span>
+            </div>
+            <p className="text-slate-500 font-bold text-[11px] mt-0.5">
+              {isFormulaApproved 
+                ? '✓ ผ่านการรับรองความถูกต้องเรียบร้อยแล้ว แผนงานพร้อมจัดส่งเพื่อไปรันงานต่อที่สาขา' 
+                : '⌛ รอหัวหน้างานระดับ Manager (Level 2) ตรวจสอบความถูกต้องและกดอนุมัติสูตรเพื่อส่งไปรันต่อที่สาขา'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Action to toggle approval if Level <= 2 */}
+          {currentUser && currentUser.level <= 2 ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (isFormulaApproved) {
+                  triggerConfirm(
+                    "ยกเลิกการอนุมัติสูตร",
+                    "คุณต้องการยกเลิกสถานะการอนุมัติสูตรวันนี้ใช่หรือไม่?",
+                    () => onApproveFormula(false)
+                  );
+                } else {
+                  setShowApproveConfirm(true);
+                }
+              }}
+              className={`px-3.5 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-sm border ${
+                isFormulaApproved 
+                  ? 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200' 
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
+              }`}
+            >
+              <span>{isFormulaApproved ? '✘ ยกเลิกอนุมัติสูตร' : '✓ คลิกอนุมัติเพื่อรันที่สาขาต่อ'}</span>
+            </button>
+          ) : null}
+
+
         </div>
       </div>
 
@@ -177,7 +237,7 @@ export default function FinalSummaryTable({ finalizedProducts }: FinalSummaryTab
       </div>
 
       {/* Main Table Layout */}
-      <div className="overflow-x-auto max-h-[400px] overflow-y-auto no-scrollbar">
+      <div className="overflow-x-auto max-h-[500px] overflow-y-auto no-scrollbar">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-55 select-none text-[11px] font-bold text-slate-400 uppercase tracking-wider sticky top-0 bg-slate-50 z-10">
@@ -260,24 +320,24 @@ export default function FinalSummaryTable({ finalizedProducts }: FinalSummaryTab
         </table>
       </div>
 
-      {showConfirm && (
+      {showApproveConfirm && (
         <div 
           id="confirm-modal-overlay"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
         >
           <div 
             id="confirm-modal-box"
-            className="bg-white rounded-2xl shadow-2xl border border-red-100 max-w-md w-full overflow-hidden animate-scale-up"
+            className="bg-white rounded-2xl shadow-2xl border border-emerald-100 max-w-md w-full overflow-hidden animate-scale-up"
           >
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-red-50 to-white px-5 py-4 border-b border-red-100 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-[#ba191a]">
+            <div className="bg-gradient-to-r from-emerald-50 to-white px-5 py-4 border-b border-emerald-100 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-emerald-700">
                 <AlertTriangle className="w-5 h-5 animate-bounce" />
-                <span className="font-extrabold text-sm md:text-base">ยืนยันการบันทึกรายงานขั้นสุดท้าย</span>
+                <span className="font-extrabold text-sm md:text-base">ยืนยันอนุมัติสูตรคำนวณและปรับยอด</span>
               </div>
               <button 
                 id="btn-confirm-modal-close"
-                onClick={() => setShowConfirm(false)}
+                onClick={() => setShowApproveConfirm(false)}
                 className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-full hover:bg-slate-100"
               >
                 <X className="w-4 h-4" />
@@ -286,18 +346,18 @@ export default function FinalSummaryTable({ finalizedProducts }: FinalSummaryTab
 
             {/* Modal Content */}
             <div className="p-6 space-y-4">
-              <div className="p-4 bg-red-50/50 border border-red-100 rounded-xl text-xs md:text-sm text-slate-700 space-y-2.5">
-                <div className="font-extrabold text-[#ba191a] flex items-center gap-1.5 text-sm">
-                  ⚠️ คำเตือนสำคัญสำหรับการดำเนินงาน
+              <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl text-xs md:text-sm text-slate-700 space-y-2.5">
+                <div className="font-extrabold text-emerald-800 flex items-center gap-1.5 text-sm">
+                  ⚠️ ยืนยันการส่งข้อมูลไปยังสาขา
                 </div>
                 <p className="leading-relaxed font-bold text-slate-950 text-xs md:text-sm">
-                  หากดำเนินการบันทึกและยืนยันข้อมูลแล้ว จะไม่สามารถทำการแก้ไขหรือปรับปรุงข้อมูลประจำวันนี้ได้อีกต่อไป โปรดตรวจสอบความครบถ้วนและความถูกต้องของข้อมูลทั้งหมดอย่างละเอียดรอบคอบก่อนดำเนินงาน
+                  คุณยืนยันความถูกต้องของสูตรคำนวณและยอดปรับปรุงวันนี้เพื่ออนุมัติสำหรับนำส่งไปรันงานต่อที่แต่ละสาขาใช่หรือไม่? เมื่อทำการอนุมัติแล้ว แต่ละสาขาจะสามารถนำสูตรคำนวณของวันนี้ไปใช้งานได้อย่างเป็นทางการทันที
                 </p>
               </div>
 
               <div className="text-[11.5px] font-bold text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100 flex justify-between items-center">
                 <span>จำนวนรายการสินค้าทั้งหมด:</span>
-                <span className="text-[#ba191a] font-black font-mono text-xs">{finalizedProducts?.length || 0} รายการ</span>
+                <span className="text-emerald-700 font-black font-mono text-xs">{finalizedProducts?.length || 0} รายการ</span>
               </div>
             </div>
 
@@ -305,7 +365,7 @@ export default function FinalSummaryTable({ finalizedProducts }: FinalSummaryTab
             <div className="bg-slate-50 px-5 py-4 border-t border-slate-150 flex items-center justify-end gap-2.5">
               <button
                 id="btn-confirm-modal-cancel"
-                onClick={() => setShowConfirm(false)}
+                onClick={() => setShowApproveConfirm(false)}
                 className="px-4 py-2 text-slate-600 hover:text-slate-800 bg-white hover:bg-slate-100 border border-slate-250 rounded-xl text-xs md:text-sm font-black transition-all cursor-pointer"
               >
                 ยกเลิก / กลับไปตรวจสอบ
@@ -313,15 +373,13 @@ export default function FinalSummaryTable({ finalizedProducts }: FinalSummaryTab
               <button
                 id="btn-confirm-modal-approve"
                 onClick={() => {
-                  if (pendingType) {
-                    handleExportData(pendingType);
-                  }
-                  setShowConfirm(false);
+                  onApproveFormula(true);
+                  setShowApproveConfirm(false);
                 }}
-                className="px-5 py-2 bg-[#ba191a] hover:bg-[#a11113] active:scale-95 text-white rounded-xl text-xs md:text-sm font-black transition-all shadow-md cursor-pointer flex items-center gap-1"
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs md:text-sm font-black transition-all shadow-md cursor-pointer flex items-center gap-1"
               >
                 <Check className="w-4 h-4" />
-                <span>ตกลง, บันทึกและยืนยัน</span>
+                <span>ตกลง, อนุมัติสูตรคำนวณ</span>
               </button>
             </div>
           </div>
