@@ -47,8 +47,32 @@ export default function RecipeConfigPanel({
   selectedCount,
   readOnly = false
 }: RecipeConfigPanelProps & { readOnly?: boolean }) {
-  const [startDate, setStartDate] = useState<string>('02/03/2026');
-  const [endDate, setEndDate] = useState<string>('02/03/2026');
+  // Helper to format Date to DD/MM/YYYY
+  const formatDateToDDMMYYYY = (date: Date) => {
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const yyyy = date.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  };
+
+  const todayDateObj = new Date();
+  const getOffsetDateString = (offsetDays: number) => {
+    const d = new Date(todayDateObj);
+    d.setDate(todayDateObj.getDate() + offsetDays);
+    return formatDateToDDMMYYYY(d);
+  };
+
+  // Dynamically calculate the 4 allowed delivery dates (+2 to +5 days from today)
+  // For today = 02/07/2026, this gives 04/07/2026, 05/07/2026, 06/07/2026, 07/07/2026
+  const allowedDates = [
+    getOffsetDateString(2),
+    getOffsetDateString(3),
+    getOffsetDateString(4),
+    getOffsetDateString(5),
+  ];
+
+  const [startDate, setStartDate] = useState<string>(allowedDates[0]);
+  const [endDate, setEndDate] = useState<string>(allowedDates[0]);
   const [mainValue, setMainValue] = useState<number>(20);
   const [genComparison, setGenComparison] = useState<string>('<=');
   const [genValue, setGenValue] = useState<number>(0);
@@ -351,6 +375,7 @@ export default function RecipeConfigPanel({
           overrideQty,
           price,
           selected: true, // Auto select to map onto active summaries!
+          delDate: startDate,
         };
       });
     });
@@ -517,9 +542,9 @@ export default function RecipeConfigPanel({
                     setEndDate(e.target.value);
                   }}
                 >
-                  <option value="02/03/2026">02/03/2026</option>
-                  <option value="03/03/2026">03/03/2026</option>
-                  <option value="04/03/2026">04/03/2026</option>
+                  {allowedDates.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-800 font-black">
                   <svg className="fill-current h-4.5 w-4.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
@@ -871,7 +896,8 @@ export default function RecipeConfigPanel({
           ...p,
           plusQty: nextPlusQty,
           overrideQty,
-          price
+          price,
+          delDate: startDate
         };
       });
 
@@ -928,9 +954,9 @@ export default function RecipeConfigPanel({
                   setEndDate(e.target.value);
                 }}
               >
-                <option value="02/03/2026">02/03/2026</option>
-                <option value="03/03/2026">03/03/2026</option>
-                <option value="04/03/2026">04/03/2026</option>
+                {allowedDates.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
@@ -1011,19 +1037,29 @@ export default function RecipeConfigPanel({
               {/* Row 1: Start/End date parameters */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs font-semibold text-slate-705">
                 <span className="min-w-[70px] text-slate-500 font-bold">วันที่เริ่มต้น</span>
-                <input
-                  type="text"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="px-3py-1.5 border border-slate-200 bg-slate-50 rounded text-slate-800 text-center font-bold w-32 focus:outline-none focus:ring-1 focus:ring-red-500 shadow-sm"
-                />
+                <div className="relative">
+                  <select
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="px-3 py-1.5 border border-slate-200 bg-white rounded text-slate-800 font-bold w-32 appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-red-500 shadow-sm text-center"
+                  >
+                    {allowedDates.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
                 <span className="text-slate-500 font-bold">วันที่สิ้นสุด</span>
-                <input
-                  type="text"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="px-3 py-1.5 border border-slate-200 bg-slate-50 rounded text-slate-800 text-center font-bold w-32 focus:outline-none focus:ring-1 focus:ring-red-500 shadow-sm"
-                />
+                <div className="relative">
+                  <select
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="px-3 py-1.5 border border-slate-200 bg-white rounded text-slate-800 font-bold w-32 appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-red-500 shadow-sm text-center"
+                  >
+                    {allowedDates.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Row 2: Basic modifier value, comparison symbol and generic code threshold */}

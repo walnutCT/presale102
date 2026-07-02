@@ -3,10 +3,103 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
-import { Check, CheckSquare, Layers, AlertCircle, Download, FileSpreadsheet, X, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Check, CheckSquare, Layers, AlertCircle, Download, FileSpreadsheet, X, AlertTriangle, ArrowUpDown, Users } from 'lucide-react';
 import { Product } from '../types';
 import * as XLSX from 'xlsx';
+
+export const DEMO_MULTI_USER_PRODUCTS: Product[] = [
+  {
+    id: "demo-1",
+    code: "0101",
+    name: "ขนมปังขาวแถวเล็ก",
+    category: "ขนมปังแถว",
+    multiQty: 0,
+    plusQty: 10,
+    overrideQty: 10,
+    unitPrice: 30,
+    price: 300,
+    delDate: "02/07/2026",
+    selected: true,
+    addedBy: "สมเกียรติ (Staff 1)",
+    addedAt: "02/07/2026 09:15"
+  },
+  {
+    id: "demo-2",
+    code: "0101",
+    name: "ขนมปังขาวแถวเล็ก",
+    category: "ขนมปังแถว",
+    multiQty: 0,
+    plusQty: 15,
+    overrideQty: 15,
+    unitPrice: 30,
+    price: 450,
+    delDate: "02/07/2026",
+    selected: true,
+    addedBy: "วิจิตร (Manager)",
+    addedAt: "02/07/2026 10:20"
+  },
+  {
+    id: "demo-3",
+    code: "0101",
+    name: "ขนมปังขาวแถวเล็ก",
+    category: "ขนมปังแถว",
+    multiQty: 0,
+    plusQty: 20,
+    overrideQty: 20,
+    unitPrice: 30,
+    price: 600,
+    delDate: "02/07/2026",
+    selected: true,
+    addedBy: "รสริน (Staff 2)",
+    addedAt: "02/07/2026 10:45"
+  },
+  {
+    id: "demo-4",
+    code: "0103",
+    name: "ขนมปังขาวแถวใหญ่",
+    category: "ขนมปังแถว",
+    multiQty: 0,
+    plusQty: 8,
+    overrideQty: 8,
+    unitPrice: 50,
+    price: 400,
+    delDate: "02/07/2026",
+    selected: true,
+    addedBy: "วิจิตร (Manager)",
+    addedAt: "02/07/2026 10:22"
+  },
+  {
+    id: "demo-5",
+    code: "0103",
+    name: "ขนมปังขาวแถวใหญ่",
+    category: "ขนมปังแถว",
+    multiQty: 0,
+    plusQty: 12,
+    overrideQty: 12,
+    unitPrice: 50,
+    price: 600,
+    delDate: "02/07/2026",
+    selected: true,
+    addedBy: "รสริน (Staff 2)",
+    addedAt: "02/07/2026 10:46"
+  },
+  {
+    id: "demo-6",
+    code: "0202",
+    name: "เดลี่แซนด์วิชทูน่า",
+    category: "แซนด์วิช",
+    multiQty: 0,
+    plusQty: 30,
+    overrideQty: 30,
+    unitPrice: 25,
+    price: 750,
+    delDate: "02/07/2026",
+    selected: true,
+    addedBy: "สมเกียรติ (Staff 1)",
+    addedAt: "02/07/2026 09:18"
+  }
+];
 
 interface FinalSummaryTableProps {
   finalizedProducts: Product[] | null;
@@ -14,6 +107,7 @@ interface FinalSummaryTableProps {
   onApproveFormula: (approved: boolean) => void;
   currentUser: any;
   triggerConfirm: (title: string, message: string, onConfirm: () => void) => void;
+  onLoadDemoProducts?: (products: Product[]) => void;
 }
 
 export default function FinalSummaryTable({ 
@@ -21,15 +115,38 @@ export default function FinalSummaryTable({
   isFormulaApproved,
   onApproveFormula,
   currentUser,
-  triggerConfirm
+  triggerConfirm,
+  onLoadDemoProducts
 }: FinalSummaryTableProps) {
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
   const [pendingType, setPendingType] = useState<'csv' | 'xlsx' | null>(null);
+  const [sortField, setSortField] = useState<keyof Product | null>('code');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [popoverAnchor, setPopoverAnchor] = useState<{ x: number, y: number, code: string } | null>(null);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setPopoverAnchor(null);
+    };
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, []);
+
+  const handleSort = (field: keyof Product) => {
+    if (sortField === field) {
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
 
   if (!finalizedProducts) {
     return (
       <div className="bg-white border border-slate-200 rounded-lg p-10 text-center shadow-sm">
-        <div className="flex flex-col items-center justify-center gap-2 max-w-md mx-auto">
+        <div className="flex flex-col items-center justify-center gap-3 max-w-md mx-auto">
           <div className="p-3 bg-red-50 text-[#ba191a] rounded-full">
             <Layers className="w-8 h-8 opacity-75 animate-bounce" />
           </div>
@@ -37,23 +154,133 @@ export default function FinalSummaryTable({
           <p className="text-slate-400 text-xs leading-relaxed">
             ตารางส่วนนี้คือรายงานผลลัพธ์ที่จะถูก <span className="text-emerald-600 font-bold">Import (นำเข้าความถูกต้อง)</span> มาโดยตรงจากตารางหลักด้านบน หลังจากผ่านการคำนวณด้วยสูตรคณิตศาสตร์ปรับยอดเรียบร้อยแล้ว
           </p>
-          <p className="text-slate-400 text-[11px] bg-slate-50 border border-slate-100 p-2 rounded-md mt-1 leading-relaxed">
+          <p className="text-slate-400 text-[11px] bg-slate-50 border border-slate-100 p-2 rounded-md leading-relaxed">
              กรุณากดปุ่ม <span className="font-bold text-[#ba191a] underline">"บันทึกและยืนยัน"</span> ในตารางคำนวณด้านบนเพื่อนำเข้าตารางสรุปนี้
           </p>
+
+          {onLoadDemoProducts && (
+            <div className="mt-4 p-4 bg-indigo-50 border border-indigo-100 rounded-xl text-left shadow-sm">
+              <div className="flex items-center gap-2 text-indigo-800 font-black text-xs mb-1">
+                <Users className="w-4 h-4 text-indigo-600 animate-pulse" />
+                <span>🧪 ต้องการทดสอบระบบรวมยอดบันทึกร่วมกัน 2-3 คน?</span>
+              </div>
+              <p className="text-slate-500 font-bold text-[11px] leading-relaxed mb-3">
+                ระบบนี้รองรับเมื่อพนักงานหลายคนบันทึกสินค้าชนิดเดียวกันเข้ามา โดยตารางจะรวมยอดโดยอัตโนมัติ และแสดงรายชื่อผู้นำเข้าครบทุกคนอย่างชาญฉลาด
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  triggerConfirm(
+                    "โหลดข้อมูลจำลอง 3 ผู้ใช้",
+                    "คุณต้องการโหลดข้อมูลจำลองเพื่อสาธิตการรวมยอดพนักงาน 3 คน (สมเกียรติ, วิจิตร, รสริน) บันทึกยอดสินค้าเดียวกันหรือไม่?",
+                    () => onLoadDemoProducts(DEMO_MULTI_USER_PRODUCTS)
+                  );
+                }}
+                className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-lg shadow-md transition-all active:scale-[0.98] cursor-pointer text-center"
+              >
+                📥 คลิกเพื่อโหลดข้อมูลจำลองพนักงาน 3 คนร่วมกัน
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
-  // Totals calculations
-  const totalMulti = finalizedProducts.reduce((sum, p) => sum + p.multiQty, 0);
-  const totalPlus = finalizedProducts.reduce((sum, p) => sum + p.plusQty, 0);
-  const totalOverride = finalizedProducts.reduce((sum, p) => sum + p.overrideQty, 0);
-  const totalPrice = finalizedProducts.reduce((sum, p) => sum + p.price, 0);
+
+  // Helper to extract only the time "HH:mm" from datetime "DD/MM/YYYY HH:mm" or default to "08:30"
+  const getTimeOnly = (dateTimeStr?: string) => {
+    if (!dateTimeStr) return '08:30';
+    const parts = dateTimeStr.trim().split(' ');
+    if (parts.length > 1) {
+      return parts[1];
+    }
+    if (dateTimeStr.includes(':')) {
+      return dateTimeStr;
+    }
+    return '08:30';
+  };
+
+  // Group products by code so that identical products are consolidated
+  const groupedProducts = (() => {
+    if (!finalizedProducts) return [];
+    const map = new Map<string, Product & { _allUsers?: string[] }>();
+    finalizedProducts.forEach(p => {
+      if (map.has(p.code)) {
+        const existing = map.get(p.code)!;
+        
+        // Find which is the latest edit based on addedAt (latest timestamp string)
+        const isCurrentLater = p.addedAt && existing.addedAt 
+          ? p.addedAt > existing.addedAt 
+          : !!p.addedAt;
+
+        const latestP = isCurrentLater ? p : existing;
+
+        // Keep all unique users list for tooltip hover
+        const existingUsers = existing._allUsers || (existing.addedBy ? existing.addedBy.split(', ').map(u => u.trim()) : []);
+        const newUsers = p.addedBy ? p.addedBy.split(', ').map(u => u.trim()) : [];
+        const uniqueUsers = Array.from(new Set([...existingUsers, ...newUsers])).filter(Boolean);
+
+        const mergedMulti = existing.multiQty + p.multiQty;
+        const mergedPlus = existing.plusQty + p.plusQty;
+        // OVERRIDE_QTY = MULTI_QTY + PLUS_QTY (multiQty represents subtraction)
+        const mergedOverride = mergedPlus - mergedMulti;
+        const mergedPrice = mergedOverride * existing.unitPrice;
+
+        map.set(p.code, {
+          ...existing,
+          multiQty: mergedMulti,
+          plusQty: mergedPlus,
+          overrideQty: mergedOverride,
+          price: mergedPrice,
+          addedBy: latestP.addedBy, // USER = ชื่อ USER ที่ทำการแก้ไขล่าสุด
+          addedAt: latestP.addedAt, // TIME = คือเวลาที่แก้ไขล่าสุด
+          delDate: latestP.delDate, // DEL_DATE = วันที่ต้องการจะเพิ่มล่าสุด
+          _allUsers: uniqueUsers
+        });
+      } else {
+        map.set(p.code, { 
+          ...p,
+          _allUsers: p.addedBy ? p.addedBy.split(', ').map(u => u.trim()) : []
+        });
+      }
+    });
+    return Array.from(map.values()) as (Product & { _allUsers?: string[] })[];
+  })();
+
+  const sortedProducts = [...groupedProducts].sort((a, b) => {
+    if (!sortField) return 0;
+    let valA = a[sortField];
+    let valB = b[sortField];
+
+    if (sortField === 'addedBy') {
+      valA = valA || '';
+      valB = valB || '';
+    } else if (sortField === 'addedAt') {
+      valA = valA || `${a.delDate} 08:30`;
+      valB = valB || `${b.delDate} 08:30`;
+    }
+
+    if (typeof valA === 'string' && typeof valB === 'string') {
+      return sortDirection === 'asc' 
+        ? valA.localeCompare(valB) 
+        : valB.localeCompare(valA);
+    }
+    if (typeof valA === 'number' && typeof valB === 'number') {
+      return sortDirection === 'asc' ? valA - valB : valB - valA;
+    }
+    return 0;
+  });
+
+  // Totals calculations based on consolidated products
+  const totalMulti = groupedProducts.reduce((sum, p) => sum + p.multiQty, 0);
+  const totalPlus = groupedProducts.reduce((sum, p) => sum + p.plusQty, 0);
+  const totalOverride = groupedProducts.reduce((sum, p) => sum + p.overrideQty, 0);
+  const totalPrice = groupedProducts.reduce((sum, p) => sum + p.price, 0);
 
   // Export utility for branch processing
   const handleExportData = (type: 'csv' | 'xlsx') => {
-    if (!finalizedProducts || finalizedProducts.length === 0) return;
+    if (!groupedProducts || groupedProducts.length === 0) return;
 
     const dateStr = new Date().toISOString().split('T')[0];
     const fileName = `Presale_Final_Report_Branch_${dateStr}`;
@@ -61,7 +288,7 @@ export default function FinalSummaryTable({
     if (type === 'xlsx') {
       try {
         // Map products into flat sheet representation
-        const rawSheetData = finalizedProducts.map((p, idx) => ({
+        const rawSheetData = groupedProducts.map((p, idx) => ({
           'ลำดับ (No.)': idx + 1,
           'รหัสสินค้า (ITEM CODE)': p.code,
           'ชื่อสินค้า (ITEM NAME)': p.name,
@@ -71,6 +298,8 @@ export default function FinalSummaryTable({
           'ยอดปรับปรุงสุทธิ (OVERRIDE_QTY)': p.overrideQty,
           'มูลค่ารวมสุทธิ (PRICEAMT THB)': p.price,
           'วันส่งมอบ (DELIVERY DATE)': p.delDate,
+          'ผู้บันทึก (USER)': p.addedBy || '-',
+          'เวลาบันทึก (TIME)': getTimeOnly(p.addedAt),
           'สถานะการตรวจสอบ': 'ตรวจสอบแล้ว (CONFIRMED)'
         }));
 
@@ -106,10 +335,12 @@ export default function FinalSummaryTable({
         'OVERRIDE_QTY',
         'PRICEAMT (THB)',
         'DELIVERY DATE',
+        'USER',
+        'TIME',
         'STATUS'
       ];
       
-      const rows = finalizedProducts.map((p, idx) => [
+      const rows = groupedProducts.map((p, idx) => [
         idx + 1,
         `="${p.code}"`, // Force Excel string import prefix to prevent numeric sci-notations
         `"${p.name.replace(/"/g, '""')}"`,
@@ -119,6 +350,8 @@ export default function FinalSummaryTable({
         p.overrideQty,
         p.price,
         `="${p.delDate}"`,
+        `"${(p.addedBy || '-').replace(/"/g, '""')}"`,
+        `"${getTimeOnly(p.addedAt)}"`,
         'CONFIRMED'
       ]);
 
@@ -135,7 +368,7 @@ export default function FinalSummaryTable({
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg shadow-md text-sm overflow-hidden flex flex-col transition-all duration-300 transform border-l-[6px] border-l-emerald-500">
+    <div className="bg-white border border-slate-200 rounded-lg shadow-md text-sm overflow-hidden flex flex-col transition-all duration-300 transform border-l-[6px] border-l-emerald-500 relative">
       
       {/* Table Banner Header in Green celebrating finalization */}
       <div className="p-4 bg-gradient-to-r from-emerald-50 to-white border-b border-rose-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -241,22 +474,111 @@ export default function FinalSummaryTable({
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-55 select-none text-[11px] font-bold text-slate-400 uppercase tracking-wider sticky top-0 bg-slate-50 z-10">
-              <th className="p-3 w-10 text-center">
-                <CheckSquare className="w-4.5 h-4.5 text-emerald-500 mx-auto" />
+              <th 
+                onClick={() => handleSort('code')}
+                className="p-3 whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center gap-1">
+                  <span>ITEM CODE</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'code' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
               </th>
-              <th className="p-3 whitespace-nowrap">ITEM CODE</th>
-              <th className="p-3 whitespace-nowrap w-2/5">ITEM NAME</th>
-              <th className="p-3 text-right whitespace-nowrap">MULTI_QTY</th>
-              <th className="p-3 text-right whitespace-nowrap">PLUS_QTY</th>
-              <th className="p-3 text-right whitespace-nowrap">OVERRIDE_QTY</th>
-              <th className="p-3 text-right whitespace-nowrap">PRICEAMT (THB)</th>
-              <th className="p-3 text-center whitespace-nowrap">DEL_DATE</th>
+              <th 
+                onClick={() => handleSort('name')}
+                className="p-3 whitespace-nowrap w-2/5 cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center gap-1">
+                  <span>ITEM NAME</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'name' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('multiQty')}
+                className="p-3 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center justify-end gap-1">
+                  <span>MULTI_QTY</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'multiQty' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('plusQty')}
+                className="p-3 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center justify-end gap-1">
+                  <span>PLUS_QTY</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'plusQty' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('overrideQty')}
+                className="p-3 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center justify-end gap-1">
+                  <span>OVERRIDE_QTY</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'overrideQty' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('price')}
+                className="p-3 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center justify-end gap-1">
+                  <span>PRICEAMT (THB)</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'price' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('delDate')}
+                className="p-3 text-center whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <span>DEL_DATE</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'delDate' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('addedBy')}
+                className="p-3 text-center whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <span>USER</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'addedBy' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('addedAt')}
+                className="p-3 text-center whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <span>TIME</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'addedAt' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-600 text-xs font-semibold">
-            {finalizedProducts.length === 0 ? (
+            {sortedProducts.length === 0 ? (
               <tr>
-                <td colSpan={8} className="p-10 text-center text-slate-400 font-bold bg-slate-50/50">
+                <td colSpan={9} className="p-10 text-center text-slate-400 font-bold bg-slate-50/50">
                   <div className="flex flex-col items-center justify-center gap-1">
                     <AlertCircle className="w-5 h-5 text-slate-350" />
                     <span>ไม่พบสินค้าที่ตรงตามประเภทสินค้าหรือตัวเลือกที่เลือกใน Sidebar</span>
@@ -265,21 +587,53 @@ export default function FinalSummaryTable({
                 </td>
               </tr>
             ) : (
-              finalizedProducts.map(p => {
+              sortedProducts.map(p => {
                 const isPriceNegative = p.price < 0;
+                // Get all raw records matching this code to see individual inputs
+                const rawRecords = finalizedProducts.filter(r => r.code === p.code);
+                const hasMultipleUsers = rawRecords.length > 1;
+
                 return (
-                  <tr key={p.id} className="hover:bg-emerald-50/15 transition-colors">
-                    <td className="p-3 text-center">
-                      <Check className="w-4 h-4 text-emerald-600 mx-auto" />
+                  <tr 
+                    key={p.code} 
+                    className="hover:bg-emerald-50/15 transition-colors border-b border-slate-100"
+                  >
+                    <td className="p-3 font-mono text-slate-500 tracking-tight whitespace-nowrap">
+                      <span>{p.code}</span>
                     </td>
-                    <td className="p-3 font-mono text-slate-500 tracking-tight whitespace-nowrap">{p.code}</td>
                     <td className="p-3 truncate max-w-xs font-bold text-slate-800" title={p.name}>
-                      {p.name}
-                      <span className="text-[9px] text-slate-400 font-normal ml-2 bg-slate-100 px-1.5 py-0.5 rounded-full">
-                        {p.category}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="truncate">{p.name}</span>
+                        <span className="text-[9px] text-slate-400 font-normal shrink-0 bg-slate-100 px-1.5 py-0.5 rounded-full">
+                          {p.category}
+                        </span>
+                        {hasMultipleUsers && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (popoverAnchor && popoverAnchor.code === p.code) {
+                                setPopoverAnchor(null);
+                              } else {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setPopoverAnchor({
+                                  x: rect.right + 12,
+                                  y: rect.top + rect.height / 2,
+                                  code: p.code
+                                });
+                              }
+                            }}
+                            className="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 font-black px-2 py-0.5 rounded-md shrink-0 flex items-center gap-0.5 cursor-pointer select-none active:scale-95 transition-all outline-none shadow-sm"
+                          >
+                            <Users className="w-3 h-3 text-rose-600" />
+                            <span>รวม {rawRecords.length} คน</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
-                    <td className="p-3 text-right font-mono text-slate-600 text-xs">{p.multiQty.toLocaleString()}</td>
+                    <td className="p-3 text-right font-mono text-rose-600 text-xs font-semibold">
+                      {p.multiQty > 0 ? `-${p.multiQty.toLocaleString()}` : '0'}
+                    </td>
                     <td className="p-3 text-right font-mono text-slate-600 text-xs">{p.plusQty.toLocaleString()}</td>
                     <td className={`p-3 text-right font-mono text-xs font-bold ${
                       p.overrideQty < 0 ? 'text-rose-600' : p.overrideQty > 0 ? 'text-emerald-600' : 'text-slate-500'
@@ -292,6 +646,22 @@ export default function FinalSummaryTable({
                       {p.price.toLocaleString()}
                     </td>
                     <td className="p-3 text-center font-mono text-[11px] text-slate-400 whitespace-nowrap">{p.delDate}</td>
+                    <td className="p-3 text-center whitespace-nowrap">
+                      {p.addedBy ? (
+                        <div 
+                          className="flex flex-wrap gap-1 justify-center max-w-[150px] mx-auto select-none"
+                        >
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-sm cursor-default">
+                            {p.addedBy}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 font-bold">-</span>
+                      )}
+                    </td>
+                    <td className="p-3 text-center font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                      {getTimeOnly(p.addedAt)}
+                    </td>
                   </tr>
                 );
               })
@@ -299,13 +669,14 @@ export default function FinalSummaryTable({
           </tbody>
           
           {/* Table Footer Totals Row */}
-          {finalizedProducts.length > 0 && (
-            <tfoot>
-              <tr className="border-t-2 border-slate-200 bg-emerald-50/30 font-bold text-slate-800 text-xs uppercase">
-                <td className="p-3.5"></td>
+          {groupedProducts.length > 0 && (
+            <tfoot className="sticky bottom-0 z-10 bg-slate-50 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+              <tr className="border-t-2 border-slate-200 bg-slate-50 font-bold text-slate-800 text-xs uppercase">
                 <td className="p-3.5 text-center text-emerald-800 font-extrabold">TOTAL</td>
-                <td className="p-3.5 text-slate-400 text-[10px] font-normal">ยืนยันและล็อคผลลัพธ์คำนวณแล้ว</td>
-                <td className="p-3.5 text-right font-mono text-xs font-bold text-slate-800">{totalMulti.toLocaleString()}</td>
+                <td className="p-3.5 text-slate-400 text-[10px] font-normal">ยืนยันและล็อคผลลัพธ์คำนวณแล้ว (รวมกลุ่มสินค้าเดียวกัน)</td>
+                <td className="p-3.5 text-right font-mono text-xs font-bold text-rose-600">
+                  {totalMulti > 0 ? `-${totalMulti.toLocaleString()}` : '0'}
+                </td>
                 <td className="p-3.5 text-right font-mono text-xs font-bold text-slate-800">{totalPlus.toLocaleString()}</td>
                 <td className={`p-3.5 text-right font-mono text-xs font-extrabold ${totalOverride < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
                   {totalOverride > 0 ? `+${totalOverride}` : totalOverride.toLocaleString()}
@@ -313,6 +684,8 @@ export default function FinalSummaryTable({
                 <td className={`p-3.5 text-right font-mono text-sm font-black ${totalPrice < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
                   {totalPrice.toLocaleString()}
                 </td>
+                <td className="p-3.5"></td>
+                <td className="p-3.5"></td>
                 <td className="p-3.5"></td>
               </tr>
             </tfoot>
@@ -384,6 +757,100 @@ export default function FinalSummaryTable({
             </div>
           </div>
         </div>
+      )}
+
+      {popoverAnchor && (
+        <>
+          {/* Backdrop overlay to close when clicking outside */}
+          <div 
+            className="fixed inset-0 z-40 bg-transparent cursor-default" 
+            onClick={() => setPopoverAnchor(null)}
+          />
+
+          {/* Floating Popover on the absolute top-most layer (fixed, z-50) */}
+          <div 
+            className="fixed bg-white text-slate-800 rounded-2xl shadow-2xl p-4 z-50 text-xs border border-red-500 font-normal w-[420px] animate-scale-up"
+            style={{
+              left: `${popoverAnchor.x}px`,
+              top: `${popoverAnchor.y}px`,
+              transform: 'translateY(-50%)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(() => {
+              const activeProduct = sortedProducts.find(prod => prod.code === popoverAnchor.code);
+              const activeRawRecords = activeProduct && finalizedProducts ? finalizedProducts.filter(r => r.code === activeProduct.code) : [];
+              return (
+                <>
+                  <div className="font-extrabold text-red-700 border-b border-rose-100 pb-2.5 mb-3 flex items-center justify-between">
+                    <span className="text-sm">รายชื่อผู้บันทึก & ยอดที่ทำ</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded font-bold">
+                        รวม {activeRawRecords.length} คน
+                      </span>
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPopoverAnchor(null);
+                        }}
+                        className="p-1 hover:bg-rose-50 rounded text-rose-500 hover:text-red-700 transition-colors cursor-pointer"
+                      >
+                        <X className="w-4.5 h-4.5" />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Table Layout */}
+                  <div className="max-h-60 overflow-y-auto no-scrollbar border border-rose-100 rounded-xl">
+                    <table className="w-full text-left border-collapse text-[11px]">
+                      <thead>
+                        <tr className="bg-rose-50/70 text-rose-800 border-b border-rose-100 font-bold sticky top-0 z-10">
+                          <th className="p-2 text-left font-black">ผู้บันทึก / เวลา</th>
+                          <th className="p-2 text-right font-black">ลบ (Multi)</th>
+                          <th className="p-2 text-right font-black">บวก (Plus)</th>
+                          <th className="p-2 text-right font-black">สุทธิ(ชิ้น)</th>
+                          <th className="p-2 text-right font-black">บาท</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeRawRecords.map((r, rIdx) => (
+                          <tr key={r.id || rIdx} className="border-b border-slate-100 last:border-b-0 hover:bg-rose-50/20 transition-colors">
+                            <td className="p-2 align-middle">
+                              <div className="font-bold text-slate-950 flex items-center gap-1">
+                                <span>👤</span>
+                                <span className="truncate max-w-[90px]" title={r.addedBy}>{r.addedBy || 'ไม่ระบุชื่อ'}</span>
+                              </div>
+                              <div className="text-[10px] text-slate-500 font-mono pl-4">
+                                {getTimeOnly(r.addedAt)}
+                              </div>
+                            </td>
+                            <td className="p-2 text-right text-rose-600 font-bold font-mono align-middle">
+                              {r.multiQty !== 0 ? `-${r.multiQty.toLocaleString()}` : '0'}
+                            </td>
+                            <td className="p-2 text-right text-emerald-600 font-bold font-mono align-middle">
+                              {r.plusQty !== 0 ? `+${r.plusQty.toLocaleString()}` : '0'}
+                            </td>
+                            <td className={`p-2 text-right font-bold font-mono align-middle ${r.overrideQty < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                              {r.overrideQty > 0 ? `+${r.overrideQty.toLocaleString()}` : r.overrideQty.toLocaleString()}
+                            </td>
+                            <td className={`p-2 text-right font-bold font-mono align-middle ${r.price < 0 ? 'text-rose-600' : r.price > 0 ? 'text-emerald-600' : 'text-slate-500'}`}>
+                              {r.price.toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Left pointing arrow on the left center of the popover */}
+                  <div className="absolute right-full top-1/2 -translate-y-1/2 border-[6px] border-transparent border-r-red-500"></div>
+                  <div className="absolute right-full top-1/2 -translate-y-1/2 mr-[-1.5px] border-[5px] border-transparent border-r-white"></div>
+                </>
+              );
+            })()}
+          </div>
+        </>
       )}
     </div>
   );

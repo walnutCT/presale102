@@ -69,6 +69,14 @@ export default function PresaleTable({
       let valA = a[sortField];
       let valB = b[sortField];
 
+      if (sortField === 'addedBy') {
+        valA = valA || '';
+        valB = valB || '';
+      } else if (sortField === 'addedAt') {
+        valA = valA || `${a.delDate} 08:30`;
+        valB = valB || `${b.delDate} 08:30`;
+      }
+
       if (typeof valA === 'string' && typeof valB === 'string') {
         return sortDirection === 'asc' 
           ? valA.localeCompare(valB) 
@@ -92,8 +100,8 @@ export default function PresaleTable({
   // Simulated export to Excel
   const handleExportExcel = () => {
     const csvContent = "data:text/csv;charset=utf-8," 
-      + ["ITEM_CODE,ITEM_NAME,MULTI_QTY,PLUS_QTY,OVERRIDE_QTY,PRICE,DEL_DATE", 
-         ...sortedAndFiltered.map(p => `${p.code},${p.name},${p.multiQty},${p.plusQty},${p.overrideQty},${p.price},${p.delDate}`)
+      + ["ITEM_CODE,ITEM_NAME,MULTI_QTY,PLUS_QTY,OVERRIDE_QTY,PRICE,ADDED_BY,ADDED_TIME,DEL_DATE", 
+         ...sortedAndFiltered.map(p => `${p.code},${p.name},${p.multiQty},${p.plusQty},${p.overrideQty},${p.price},${p.addedBy || 'ระบบ'},${p.addedAt || `${p.delDate} 08:30`},${p.delDate}`)
         ].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -178,14 +186,7 @@ export default function PresaleTable({
             <span>Delete</span>
           </button>
 
-          {/* Sort trigger utility */}
-          <button
-            onClick={() => handleSort('code')}
-            className="p-1.8 bg-white border border-slate-200 hover:border-slate-300 rounded text-slate-600 hover:text-slate-900 transition-colors"
-            title="เรียงตามรหัสสินค้า"
-          >
-            <ArrowUpDown className="w-4 h-4" />
-          </button>
+
 
 
 
@@ -240,24 +241,116 @@ export default function PresaleTable({
                   onChange={e => onToggleAllProducts(e.target.checked)}
                 />
               </th>
-              <th className="p-3.5 whitespace-nowrap">ITEM CODE</th>
-              <th className="p-3.5 whitespace-nowrap w-2/5">ITEM NAME</th>
-              <th className="p-3.5 text-right whitespace-nowrap">MULTI_QTY</th>
-              <th className="p-3.5 text-right whitespace-nowrap">PLUS_QTY</th>
-              <th className="p-3.5 text-right whitespace-nowrap">OVERRIDE_QTY</th>
-              <th className="p-3.5 text-right whitespace-nowrap">PRICE_AMT (THB)</th>
-              <th className="p-3.5 text-center whitespace-nowrap">DEL_DATE</th>
+              <th 
+                onClick={() => handleSort('code')}
+                className="p-3.5 whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center gap-1">
+                  <span>ITEM CODE</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'code' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('name')}
+                className="p-3.5 whitespace-nowrap w-2/5 cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center gap-1">
+                  <span>ITEM NAME</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'name' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('multiQty')}
+                className="p-3.5 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center justify-end gap-1">
+                  <span>MULTI_QTY</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'multiQty' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('plusQty')}
+                className="p-3.5 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center justify-end gap-1">
+                  <span>PLUS_QTY</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'plusQty' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('overrideQty')}
+                className="p-3.5 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center justify-end gap-1">
+                  <span>OVERRIDE_QTY</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'overrideQty' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('price')}
+                className="p-3.5 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center justify-end gap-1">
+                  <span>PRICE_AMT (THB)</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'price' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('delDate')}
+                className="p-3.5 text-center whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <span>DEL_DATE</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'delDate' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('addedBy')}
+                className="p-3.5 text-center whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <span>USER</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'addedBy' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('addedAt')}
+                className="p-3.5 text-center whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <span>TIME</span>
+                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                    sortField === 'addedAt' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-700 text-xs font-medium">
             {sortedAndFiltered.length === 0 ? (
               <tr>
-                <td colSpan={8} className="p-10 text-center text-slate-400">
+                <td colSpan={10} className="p-10 text-center text-slate-400">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <AlertCircle className="w-8 h-8 text-slate-300" />
                     <span>ไม่พบสินค้าที่ตรงตามเงื่อนไขการกรองของคุณ</span>
                     <button
-                      onClick={onResetAllData}
+                       onClick={onResetAllData}
                       className="mt-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded shadow hover:shadow-md transition-all cursor-pointer flex items-center gap-1.5"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
@@ -267,64 +360,93 @@ export default function PresaleTable({
                 </td>
               </tr>
             ) : (
-              sortedAndFiltered.map(p => {
-                const isPriceNegative = p.price < 0;
-                return (
-                  <tr 
-                    key={p.id} 
-                    className={`hover:bg-slate-50/80 transition-colors ${
-                      p.selected ? 'bg-red-50/15' : ''
-                    }`}
-                  >
-                    <td className="p-3 text-center">
-                      <input
-                        type="checkbox"
-                        disabled={readOnly}
-                        className={`rounded border-slate-300 text-red-600 h-3.5 w-3.5 ${
-                          readOnly ? 'cursor-not-allowed opacity-50' : 'focus:ring-red-500 cursor-pointer'
-                        }`}
-                        checked={p.selected}
-                        onChange={() => onToggleProduct(p.id)}
-                      />
-                    </td>
-                    <td className="p-3 font-mono text-slate-500 tracking-tight whitespace-nowrap">{p.code}</td>
-                    <td className="p-3 truncate max-w-xs block font-bold text-slate-800" title={p.name}>
-                      {p.name}
-                      <span className="text-[9px] text-slate-400 font-normal ml-2 bg-slate-100 px-1.5 py-0.5 rounded-full">
-                        {p.category}
-                      </span>
-                    </td>
-                    <td className="p-3 text-right font-mono text-slate-700 text-xs font-semibold">
-                      {p.multiQty.toLocaleString()}
-                    </td>
-                    <td className="p-3 text-right font-mono text-slate-700 text-xs font-semibold">
-                      {p.plusQty.toLocaleString()}
-                    </td>
-                    <td className={`p-3 text-right font-mono text-xs font-bold ${
-                      p.overrideQty < 0 ? 'text-rose-600' : p.overrideQty > 0 ? 'text-emerald-600' : 'text-slate-500'
-                    }`}>
-                      {p.overrideQty > 0 ? `+${p.overrideQty}` : p.overrideQty.toLocaleString()}
-                    </td>
-                    <td className={`p-3 text-right font-mono text-xs font-bold ${
-                      isPriceNegative ? 'text-rose-600' : p.price > 0 ? 'text-emerald-600' : 'text-slate-500'
-                    }`}>
-                      {p.price.toLocaleString()}
-                    </td>
-                    <td className="p-3 text-center font-mono text-[11px] text-slate-400 whitespace-nowrap">{p.delDate}</td>
-                  </tr>
-                );
-              })
+              (() => {
+                // Helper to extract only the time "HH:mm" from datetime "DD/MM/YYYY HH:mm" or default to "08:30"
+                const getTimeOnly = (dateTimeStr?: string) => {
+                  if (!dateTimeStr) return '08:30';
+                  const parts = dateTimeStr.trim().split(' ');
+                  if (parts.length > 1) {
+                    return parts[1];
+                  }
+                  if (dateTimeStr.includes(':')) {
+                    return dateTimeStr;
+                  }
+                  return '08:30';
+                };
+
+                return sortedAndFiltered.map(p => {
+                  const isPriceNegative = p.price < 0;
+                  return (
+                    <tr 
+                      key={p.id} 
+                      className={`hover:bg-slate-50/80 transition-colors ${
+                        p.selected ? 'bg-red-50/15' : ''
+                      }`}
+                    >
+                      <td className="p-3 text-center">
+                        <input
+                          type="checkbox"
+                          disabled={readOnly}
+                          className={`rounded border-slate-300 text-red-600 h-3.5 w-3.5 ${
+                            readOnly ? 'cursor-not-allowed opacity-50' : 'focus:ring-red-500 cursor-pointer'
+                          }`}
+                          checked={p.selected}
+                          onChange={() => onToggleProduct(p.id)}
+                        />
+                      </td>
+                      <td className="p-3 font-mono text-slate-500 tracking-tight whitespace-nowrap">{p.code}</td>
+                      <td className="p-3 truncate max-w-xs block font-bold text-slate-800" title={p.name}>
+                        {p.name}
+                        <span className="text-[9px] text-slate-400 font-normal ml-2 bg-slate-100 px-1.5 py-0.5 rounded-full">
+                          {p.category}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right font-mono text-rose-600 text-xs font-semibold">
+                        {p.multiQty > 0 ? `-${p.multiQty.toLocaleString()}` : '0'}
+                      </td>
+                      <td className="p-3 text-right font-mono text-slate-700 text-xs font-semibold">
+                        {p.plusQty.toLocaleString()}
+                      </td>
+                      <td className={`p-3 text-right font-mono text-xs font-bold ${
+                        p.overrideQty < 0 ? 'text-rose-600' : p.overrideQty > 0 ? 'text-emerald-600' : 'text-slate-500'
+                      }`}>
+                        {p.overrideQty > 0 ? `+${p.overrideQty}` : p.overrideQty.toLocaleString()}
+                      </td>
+                      <td className={`p-3 text-right font-mono text-xs font-bold ${
+                        isPriceNegative ? 'text-rose-600' : p.price > 0 ? 'text-emerald-600' : 'text-slate-500'
+                      }`}>
+                        {p.price.toLocaleString()}
+                      </td>
+                      <td className="p-3 text-center font-mono text-[11px] text-slate-400 whitespace-nowrap">{p.delDate}</td>
+                      <td className="p-3 text-center whitespace-nowrap">
+                        {p.addedBy ? (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                            {p.addedBy}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-bold">-</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                        {getTimeOnly(p.addedAt)}
+                      </td>
+                    </tr>
+                  );
+                });
+              })()
             )}
           </tbody>
           
           {/* Table Footer Totals Row */}
           {sortedAndFiltered.length > 0 && (
-            <tfoot>
+            <tfoot className="sticky bottom-0 z-10 bg-slate-50 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
               <tr className="border-t-2 border-slate-200 bg-slate-50 font-bold text-slate-800 text-xs uppercase">
                 <td className="p-3.5"></td>
                 <td className="p-3.5 text-center">TOTAL</td>
                 <td className="p-3.5 text-slate-400 text-[10px] font-normal">คำนวณจากรายการที่กรองผ่าน</td>
-                <td className="p-3.5 text-right font-mono text-xs font-bold text-slate-800">{totalMulti.toLocaleString()}</td>
+                <td className="p-3.5 text-right font-mono text-xs font-bold text-rose-600">
+                  {totalMulti > 0 ? `-${totalMulti.toLocaleString()}` : '0'}
+                </td>
                 <td className="p-3.5 text-right font-mono text-xs font-bold text-slate-800">{totalPlus.toLocaleString()}</td>
                 <td className={`p-3.5 text-right font-mono text-xs font-extrabold ${totalOverride < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
                   {totalOverride > 0 ? `+${totalOverride}` : totalOverride.toLocaleString()}
@@ -332,6 +454,8 @@ export default function PresaleTable({
                 <td className={`p-3.5 text-right font-mono text-sm font-black ${totalPrice < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
                   {totalPrice.toLocaleString()}
                 </td>
+                <td className="p-3.5"></td>
+                <td className="p-3.5"></td>
                 <td className="p-3.5"></td>
               </tr>
             </tfoot>

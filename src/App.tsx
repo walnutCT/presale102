@@ -34,9 +34,59 @@ import { Product, StoreFilterState, DailyCardData, FormulaType, User } from './t
 import { INITIAL_PRODUCTS, INITIAL_DAILY_DATA, CATEGORY_DEFINITIONS, INITIAL_USERS } from './data';
 
 export default function App() {
+  // User Accounts list state (persisted in localStorage)
+  const [users, setUsers] = useState<User[]>(() => {
+    const cached = localStorage.getItem('farmhouse_users');
+    if (cached) {
+      try {
+        return JSON.parse(cached) as User[];
+      } catch (e) {
+        return INITIAL_USERS as User[];
+      }
+    }
+    localStorage.setItem('farmhouse_users', JSON.stringify(INITIAL_USERS));
+    return INITIAL_USERS as User[];
+  });
+
+  // Authentication access control state (Session-scoped for excellent UX)
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    return sessionStorage.getItem('farmhouse_logged_in') === 'true';
+  });
+
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const cached = sessionStorage.getItem('farmhouse_current_user');
+    if (cached) {
+      try {
+        return JSON.parse(cached) as User;
+      } catch (e) {
+        return null;
+      }
+    }
+    // Backward compatibility fallback
+    if (sessionStorage.getItem('farmhouse_logged_in') === 'true') {
+      const uname = sessionStorage.getItem('farmhouse_username') || 'Admin';
+      return {
+        username: uname,
+        pass: '1234',
+        level: uname.toLowerCase() === 'admin' ? 1 : 2,
+        roleName: uname.toLowerCase() === 'admin' ? 'Admin' : 'Manager',
+        description: ''
+      };
+    }
+    return null;
+  });
+
   // Products management state
   const [products, setProducts] = useState<Product[]>(() => {
-    const cached = localStorage.getItem('farmhouse_presale_products_v3');
+    const cachedUser = sessionStorage.getItem('farmhouse_current_user');
+    let username = '';
+    if (cachedUser) {
+      try {
+        username = JSON.parse(cachedUser).username;
+      } catch (e) {}
+    }
+    const key = username ? `farmhouse_presale_products_v3_${username}` : 'farmhouse_presale_products_v3';
+    const cached = localStorage.getItem(key);
     if (cached) {
       try {
         const parsed = JSON.parse(cached) as Product[];
@@ -105,7 +155,15 @@ export default function App() {
       localStorage.setItem('farmhouse_current_date', todayStr);
 
       setProducts(INITIAL_PRODUCTS);
-      localStorage.setItem('farmhouse_presale_products_v3', JSON.stringify(INITIAL_PRODUCTS));
+      const cachedUser = sessionStorage.getItem('farmhouse_current_user');
+      let username = '';
+      if (cachedUser) {
+        try {
+          username = JSON.parse(cachedUser).username;
+        } catch (e) {}
+      }
+      const key = username ? `farmhouse_presale_products_v3_${username}` : 'farmhouse_presale_products_v3';
+      localStorage.setItem(key, JSON.stringify(INITIAL_PRODUCTS));
 
       setFinalizedProducts(null);
       localStorage.removeItem('farmhouse_presale_finalized_products');
@@ -151,6 +209,16 @@ export default function App() {
     return dateStr;
   };
 
+  const getCurrentFormattedDateTime = () => {
+    const d = new Date();
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+  };
+
   // Reference to main scroll container to bounce view back up automatically
   const mainRef = useRef<HTMLElement | null>(null);
 
@@ -162,14 +230,39 @@ export default function App() {
 
   // Finalized presale result
   const [finalizedProducts, setFinalizedProducts] = useState<Product[] | null>(() => {
-    const cached = localStorage.getItem('farmhouse_presale_finalized');
+    const cached = localStorage.getItem('farmhouse_presale_finalized_products') || localStorage.getItem('farmhouse_presale_finalized');
     return cached ? JSON.parse(cached) : null;
   });
 
-  // Auto caching side effects
+  // Auto caching side effects (segmented by current user)
   useEffect(() => {
-    localStorage.setItem('farmhouse_presale_products_v3', JSON.stringify(products));
-  }, [products]);
+    const username = currentUser?.username || '';
+    const key = username ? `farmhouse_presale_products_v3_${username}` : 'farmhouse_presale_products_v3';
+    localStorage.setItem(key, JSON.stringify(products));
+  }, [products, currentUser]);
+
+  // Load products of the current user when currentUser switches
+  useEffect(() => {
+    const username = currentUser?.username || '';
+    const key = username ? `farmhouse_presale_products_v3_${username}` : 'farmhouse_presale_products_v3';
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached) as Product[];
+        const cachedCodes = new Set(parsed.map(p => p.code));
+        const missing = INITIAL_PRODUCTS.filter(p => !cachedCodes.has(p.code));
+        if (missing.length > 0) {
+          setProducts([...parsed, ...missing]);
+        } else {
+          setProducts(parsed);
+        }
+      } catch (e) {
+        setProducts(INITIAL_PRODUCTS);
+      }
+    } else {
+      setProducts(INITIAL_PRODUCTS);
+    }
+  }, [currentUser]);
 
   const productsWithCurrentDate = products.map(p => ({
     ...p,
@@ -183,48 +276,6 @@ export default function App() {
       localStorage.removeItem('farmhouse_presale_finalized');
     }
   }, [finalizedProducts]);
-
-  // User Accounts list state (persisted in localStorage)
-  const [users, setUsers] = useState<User[]>(() => {
-    const cached = localStorage.getItem('farmhouse_users');
-    if (cached) {
-      try {
-        return JSON.parse(cached) as User[];
-      } catch (e) {
-        return INITIAL_USERS as User[];
-      }
-    }
-    localStorage.setItem('farmhouse_users', JSON.stringify(INITIAL_USERS));
-    return INITIAL_USERS as User[];
-  });
-
-  // Authentication access control state (Session-scoped for excellent UX)
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
-    return sessionStorage.getItem('farmhouse_logged_in') === 'true';
-  });
-
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const cached = sessionStorage.getItem('farmhouse_current_user');
-    if (cached) {
-      try {
-        return JSON.parse(cached) as User;
-      } catch (e) {
-        return null;
-      }
-    }
-    // Backward compatibility fallback
-    if (sessionStorage.getItem('farmhouse_logged_in') === 'true') {
-      const uname = sessionStorage.getItem('farmhouse_username') || 'Admin';
-      return {
-        username: uname,
-        pass: '1234',
-        level: uname.toLowerCase() === 'admin' ? 1 : 2,
-        roleName: uname.toLowerCase() === 'admin' ? 'Admin' : 'Manager',
-        description: ''
-      };
-    }
-    return null;
-  });
 
   // Formula Approval State ("อนุมัติสูตร" duty for Manager and Admin)
   const [isFormulaApproved, setIsFormulaApproved] = useState<boolean>(() => {
@@ -307,7 +358,9 @@ export default function App() {
         ...p,
         plusQty: newQty,
         overrideQty,
-        price: overrideQty * p.unitPrice
+        price: overrideQty * p.unitPrice,
+        addedBy: currentUser?.username || 'Admin',
+        addedAt: getCurrentFormattedDateTime()
       };
     }));
   };
@@ -361,7 +414,9 @@ export default function App() {
           ...p,
           plusQty: nextPlusQty,
           overrideQty,
-          price
+          price,
+          addedBy: currentUser?.username || 'Admin',
+          addedAt: getCurrentFormattedDateTime()
         };
       });
     });
@@ -377,8 +432,7 @@ export default function App() {
         "บันทึกข้อมูลแผนงาน Presale",
         "คุณต้องการบันทึกข้อมูลและผลลัพธ์การคำนวณทั้งหมดของตารางด้านบนใช่หรือไม่? (คุณยังคงสามารถแก้ไขและคำนวณข้อมูลต่อได้)",
         () => {
-          // Edits are automatically saved to localStorage in the useEffect when `products` changes, 
-          // so we just provide a reassurance notification that the state is recorded.
+          // Edits are automatically saved to user-specific localStorage
         }
       );
       return;
@@ -386,16 +440,54 @@ export default function App() {
 
     // Level 1, 2, and 3 can finalize/lock the system for the day
     triggerConfirm(
-      "บันทึกและยืนยันข้อมูลสรุป",
-      "ถ้ากดยืนยันแล้วจะไม่สามารถแก้ไขข้อมูลวันนี้ได้อีกแล้ว กรุณาตรวจสอบข้อมูลให้แน่ใจ",
+      "บันทึกและยืนยันข้อมูลสรุปส่วนกลาง",
+      "คุณยืนยันที่จะบันทึกผลการคำนวณลงตารางสรุปใช่หรือไม่? ข้อมูลบนกระดานทดลองส่วนตัวของคุณจะถูกนำเข้าไปบันทึกร่วมกับสมาชิกผู้ใช้อื่นในรายงานสรุปส่วนกลางด้านล่าง",
       () => {
-        const datedProducts = products.map(p => ({
-          ...p,
-          delDate: formatDDMMYYYY(currentDate)
-        }));
-        setFinalizedProducts(datedProducts);
-        // Also save to localStorage
-        localStorage.setItem('farmhouse_presale_finalized_products', JSON.stringify(datedProducts));
+        const username = currentUser?.username || 'ผู้ใช้';
+        const timestamp = getCurrentFormattedDateTime();
+        
+        // Find products in current user's playground that have changes
+        const userEdits = products
+          .filter(p => p.plusQty !== 0 || p.overrideQty !== 0 || p.addedBy === username)
+          .map(p => ({
+            ...p,
+            addedBy: p.addedBy || username,
+            addedAt: p.addedAt || timestamp,
+            delDate: formatDDMMYYYY(currentDate)
+          }));
+
+        if (userEdits.length === 0) {
+          // Fallback to taking selected products or all products of the user
+          const selectedList = products.filter(p => p.selected);
+          const listToSave = selectedList.length > 0 ? selectedList : products;
+          
+          const mapped = listToSave.map(p => ({
+            ...p,
+            addedBy: p.addedBy || username,
+            addedAt: p.addedAt || timestamp,
+            delDate: formatDDMMYYYY(currentDate)
+          }));
+          userEdits.push(...mapped);
+        }
+
+        // Merge with existing finalizedProducts:
+        // We match by code AND addedBy to update if the same user resubmits, otherwise append!
+        const existing = finalizedProducts || [];
+        const updatedFinalized = [...existing];
+
+        userEdits.forEach(newP => {
+          const idx = updatedFinalized.findIndex(
+            oldP => oldP.code === newP.code && oldP.addedBy === newP.addedBy
+          );
+          if (idx > -1) {
+            updatedFinalized[idx] = newP; // update existing entry for this user
+          } else {
+            updatedFinalized.push(newP); // add new entry
+          }
+        });
+
+        setFinalizedProducts(updatedFinalized);
+        localStorage.setItem('farmhouse_presale_finalized_products', JSON.stringify(updatedFinalized));
       }
     );
   };
@@ -417,9 +509,11 @@ export default function App() {
         setCurrentDate(nextDateStr);
         localStorage.setItem('farmhouse_current_date', nextDateStr);
 
-        // Reset everything for the new day
+        // Reset active user's products for the new day
+        const username = currentUser?.username || '';
+        const key = username ? `farmhouse_presale_products_v3_${username}` : 'farmhouse_presale_products_v3';
         setProducts(INITIAL_PRODUCTS);
-        localStorage.setItem('farmhouse_presale_products_v3', JSON.stringify(INITIAL_PRODUCTS));
+        localStorage.setItem(key, JSON.stringify(INITIAL_PRODUCTS));
 
         setFinalizedProducts(null);
         localStorage.removeItem('farmhouse_presale_finalized_products');
@@ -436,11 +530,10 @@ export default function App() {
   // Clear/Reset entire board state to default templates
   const handleResetEntireBoard = () => {
     triggerConfirm(
-      "รีเซ็ตข้อมูลทั้งหมด",
-      "คุณต้องการรีเซ็ตแผนการคำนวณ Presale กลับเป็นค่าเริ่มต้นและล้างข้อมูลรายงานในตารางสรุปใช่หรือไม่?",
+      "รีเซ็ตข้อมูลกระดานทดลอง",
+      "คุณต้องการรีเซ็ตแผนการคำนวณจำลองบนกระดานทดลองส่วนตัวของคุณกลับเป็นค่าเริ่มต้นใช่หรือไม่? (การรีเซ็ตนี้จะมีผลเฉพาะกระดานของคุณเท่านั้นและไม่ล้างข้อมูลรายงานในตารางสรุปส่วนกลางด้านล่าง)",
       () => {
         setProducts(INITIAL_PRODUCTS);
-        setFinalizedProducts(null);
         setSelectedFormula(null);
       }
     );
@@ -457,7 +550,9 @@ export default function App() {
             ...existing,
             name: match.name || existing.name,
             unitPrice: nextUnitPrice,
-            price: existing.overrideQty * nextUnitPrice
+            price: existing.overrideQty * nextUnitPrice,
+            addedBy: currentUser?.username || 'Admin',
+            addedAt: getCurrentFormattedDateTime()
           };
         }
         return existing;
@@ -480,7 +575,9 @@ export default function App() {
             unitPrice: imported.unitPrice || 25,
             price: 0,
             delDate: '02/03/2026',
-            selected: false
+            selected: false,
+            addedBy: currentUser?.username || 'Admin',
+            addedAt: getCurrentFormattedDateTime()
           });
         }
       });
@@ -685,29 +782,29 @@ export default function App() {
             <main ref={mainRef} className="flex-1 p-6 space-y-6 overflow-y-auto h-[calc(100vh-64px)] bg-[#f7f9fa] pb-16">
               
               {/* CURRENT DATE & SESSION CONTROLLER BAR */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in">
+              <div className="bg-white border border-slate-200 rounded-xl p-4 px-5 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm animate-fade-in">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-[#ba191a]/10 rounded-xl text-[#ba191a]">
+                  <div className="p-2 bg-[#ba191a]/10 rounded-lg text-[#ba191a]">
                     <Clock className="w-5 h-5 shrink-0" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-slate-800 text-xs md:text-sm">วันที่ปฏิบัติงานพรีเซลล์หลัก (System Work Date)</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-slate-500 text-xs md:text-sm">วันที่ปฏิบัติงานพรีเซลล์หลัก (System Work Date):</span>
+                      <span className="text-slate-950 font-black text-sm md:text-base">
+                        {formatThaiDate(currentDate)}
+                      </span>
                       {finalizedProducts !== null ? (
-                        <span className="text-[10px] bg-emerald-100 border border-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full font-black flex items-center gap-1 animate-fade-in">
+                        <span className="text-[10px] md:text-xs bg-emerald-100 border border-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full font-black flex items-center gap-1.5 animate-fade-in">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           ยืนยันแล้ว
                         </span>
                       ) : (
-                        <span className="text-[10px] bg-rose-100 border border-rose-200 text-rose-800 px-2 py-0.5 rounded-full font-black flex items-center gap-1 animate-fade-in">
+                        <span className="text-[10px] md:text-xs bg-rose-100 border border-rose-200 text-rose-800 px-2 py-0.5 rounded-full font-black flex items-center gap-1.5 animate-fade-in">
                           <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
                           ยังไม่ได้รับการยืนยัน
                         </span>
                       )}
                     </div>
-                    <p className="text-slate-950 font-black text-sm md:text-base mt-0.5">
-                      {formatThaiDate(currentDate)}
-                    </p>
                   </div>
                 </div>
               </div>
@@ -792,7 +889,22 @@ export default function App() {
                 products={productsWithCurrentDate}
                 filters={filters}
                 onSaveBatch={(updatedProducts) => {
-                  setProducts(updatedProducts);
+                  const timestamp = getCurrentFormattedDateTime();
+                  const username = currentUser?.username || '';
+                  // Update any products that differ from the current products state
+                  const finalProducts = products.map(original => {
+                    const match = updatedProducts.find(u => u.code === original.code);
+                    if (match) {
+                      const hasChanged = match.plusQty !== original.plusQty || match.delDate !== original.delDate;
+                      return {
+                        ...match,
+                        addedBy: hasChanged ? username : (match.addedBy || ''),
+                        addedAt: hasChanged ? timestamp : (match.addedAt || '')
+                      };
+                    }
+                    return original;
+                  });
+                  setProducts(finalProducts);
                 }}
                 onClearFormula={() => setSelectedFormula(null)}
                 selectedCount={selectedCount}
@@ -837,6 +949,10 @@ export default function App() {
                   onApproveFormula={handleApproveFormula}
                   currentUser={currentUser}
                   triggerConfirm={triggerConfirm}
+                  onLoadDemoProducts={(demoProducts) => {
+                    setFinalizedProducts(demoProducts);
+                    localStorage.setItem('farmhouse_presale_finalized_products', JSON.stringify(demoProducts));
+                  }}
                 />
               </div>
 

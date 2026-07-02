@@ -15,6 +15,8 @@ export interface Product {
   unitPrice: number;   // Unit Price
   delDate: string;     // Delivery Date (DEL_DATE)
   selected: boolean;   // Checkbox state in the table
+  addedBy?: string;    // Name of user who added the product
+  addedAt?: string;    // Date/time when the product was added
 }
 
 export interface StoreFilterState {
