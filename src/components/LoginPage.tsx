@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState } from 'react';
-import { User as UserIcon, Lock, AlertCircle, ShieldAlert, X, Phone, Mail, Clock } from 'lucide-react';
+import { User as UserIcon, Lock, AlertCircle, ShieldAlert, X, Phone, Mail, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { User } from '../types';
 import { INITIAL_USERS } from '../data';
 
@@ -14,6 +14,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
+  const [showDemoAccounts, setShowDemoAccounts] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,6 +59,11 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
   const handleForgotPassword = () => {
     setShowForgotModal(true);
+  };
+
+  const handleFillCredentials = (u: string, p: string) => {
+    setUsername(u);
+    setPassword(p);
   };
 
   return (
@@ -183,13 +189,121 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
         </form>
 
         {/* Forgot Password Trigger */}
-        <button
-          id="forgot-password-trigger-btn"
-          onClick={handleForgotPassword}
-          className="mt-6 text-white/80 hover:text-white hover:underline transition-all text-xs font-semibold cursor-pointer tracking-wider"
-        >
-          ลืมรหัสผ่านใช่หรือไม่? (Forgot Password?)
-        </button>
+        <div className="flex flex-col items-center gap-3 mt-6 w-full">
+          <button
+            id="forgot-password-trigger-btn"
+            onClick={handleForgotPassword}
+            className="text-white/80 hover:text-white hover:underline transition-all text-xs font-semibold cursor-pointer tracking-wider"
+          >
+            ลืมรหัสผ่านใช่หรือไม่? (Forgot Password?)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowDemoAccounts(!showDemoAccounts)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/25 text-white text-[11px] font-bold rounded-full transition-all cursor-pointer shadow-sm"
+          >
+            {showDemoAccounts ? (
+              <>
+                <ChevronUp className="w-3.5 h-3.5" />
+                <span>ซ่อนรายชื่อบัญชีจำลอง</span>
+              </>
+            ) : (
+              <>
+                <ChevronDown className="w-3.5 h-3.5" />
+                <span>แสดงรายชื่อบัญชีจำลอง (Show Accounts)</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* DEMO ACCOUNTS TABLE PANEL */}
+        {showDemoAccounts && (
+          <div className="w-full mt-4 bg-white/95 backdrop-blur rounded-lg shadow-xl border border-white/80 p-3.5 animate-fade-in text-slate-800">
+            <div className="text-[11px] font-black text-slate-500 uppercase tracking-wider mb-2 border-b border-slate-100 pb-1.5 text-center">
+              คลิกที่บัญชีด้านล่างเพื่อเลือกเข้าใช้งานอัตโนมัติ
+            </div>
+            <div className="overflow-hidden border border-slate-200 rounded">
+              <table className="w-full text-left border-collapse text-[11px] font-sans">
+                <thead>
+                  <tr className="bg-[#efefef] text-slate-700 border-b border-slate-300">
+                    <th className="px-2 py-1 text-center font-black border-r border-slate-300 w-1/4">ลำดับขั้น</th>
+                    <th className="px-2.5 py-1 font-black border-r border-slate-300 w-5/12">User</th>
+                    <th className="px-2.5 py-1 text-center font-black w-1/3">PASS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  <tr 
+                    onClick={() => handleFillCredentials('Admin', '1234')}
+                    className="bg-[#fff2cc] hover:bg-[#ffe599] cursor-pointer transition-colors text-slate-900 border-b border-[#ffd966]"
+                    title="คลิกเพื่อกรอกบัญชี Admin"
+                  >
+                    <td className="px-2 py-1.5 text-center font-black border-r border-[#ffd966] text-[#7f6000]">1</td>
+                    <td className="px-2.5 py-1.5 font-bold border-r border-[#ffd966]">Admin</td>
+                    <td className="px-2.5 py-1.5 text-center font-bold">1234</td>
+                  </tr>
+                  <tr 
+                    onClick={() => handleFillCredentials('M-2', '1234')}
+                    className="bg-[#cfe2f3] hover:bg-[#9fc5e8] cursor-pointer transition-colors text-slate-900 border-b border-[#6fa8dc]"
+                    title="คลิกเพื่อกรอกบัญชี M-2"
+                  >
+                    <td className="px-2 py-1.5 text-center font-black border-r border-[#6fa8dc] text-[#0b5394]">2</td>
+                    <td className="px-2.5 py-1.5 font-bold border-r border-[#6fa8dc]">M-2</td>
+                    <td className="px-2.5 py-1.5 text-center font-bold">1234</td>
+                  </tr>
+                  <tr 
+                    onClick={() => handleFillCredentials('S-2', '1234')}
+                    className="bg-[#cfe2f3] hover:bg-[#9fc5e8] cursor-pointer transition-colors text-slate-900 border-b border-[#6fa8dc]"
+                    title="คลิกเพื่อกรอกบัญชี S-2"
+                  >
+                    <td className="px-2 py-1.5 text-center font-black border-r border-[#6fa8dc] text-[#0b5394]">2</td>
+                    <td className="px-2.5 py-1.5 font-bold border-r border-[#6fa8dc]">S-2</td>
+                    <td className="px-2.5 py-1.5 text-center font-bold">1234</td>
+                  </tr>
+                  <tr 
+                    onClick={() => handleFillCredentials('M-3', '1234')}
+                    className="bg-[#d9ead3] hover:bg-[#b6d7a8] cursor-pointer transition-colors text-slate-900 border-b border-[#93c47d]"
+                    title="คลิกเพื่อกรอกบัญชี M-3"
+                  >
+                    <td className="px-2 py-1.5 text-center font-black border-r border-[#93c47d] text-[#274e13]">3</td>
+                    <td className="px-2.5 py-1.5 font-bold border-r border-[#93c47d]">M-3</td>
+                    <td className="px-2.5 py-1.5 text-center font-bold">1234</td>
+                  </tr>
+                  <tr 
+                    onClick={() => handleFillCredentials('S-3', '1234')}
+                    className="bg-[#d9ead3] hover:bg-[#b6d7a8] cursor-pointer transition-colors text-slate-900 border-b border-[#93c47d]"
+                    title="คลิกเพื่อกรอกบัญชี S-3"
+                  >
+                    <td className="px-2 py-1.5 text-center font-black border-r border-[#93c47d] text-[#274e13]">3</td>
+                    <td className="px-2.5 py-1.5 font-bold border-r border-[#93c47d]">S-3</td>
+                    <td className="px-2.5 py-1.5 text-center font-bold">1234</td>
+                  </tr>
+                  <tr 
+                    onClick={() => handleFillCredentials('M-4', '1234')}
+                    className="bg-[#fce5cd] hover:bg-[#f9cb9c] cursor-pointer transition-colors text-slate-900 border-b border-[#e06666]"
+                    title="คลิกเพื่อกรอกบัญชี M-4"
+                  >
+                    <td className="px-2 py-1.5 text-center font-black border-r border-[#e06666] text-[#783f04]">4</td>
+                    <td className="px-2.5 py-1.5 font-bold border-r border-[#e06666]">M-4</td>
+                    <td className="px-2.5 py-1.5 text-center font-bold">1234</td>
+                  </tr>
+                  <tr 
+                    onClick={() => handleFillCredentials('S-4', '1234')}
+                    className="bg-[#fce5cd] hover:bg-[#f9cb9c] cursor-pointer transition-colors text-slate-900"
+                    title="คลิกเพื่อกรอกบัญชี S-4"
+                  >
+                    <td className="px-2 py-1.5 text-center font-black border-r border-[#e06666] text-[#783f04]">4</td>
+                    <td className="px-2.5 py-1.5 font-bold border-r border-[#e06666]">S-4</td>
+                    <td className="px-2.5 py-1.5 text-center font-bold">1234</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="text-[9.5px] text-slate-400 font-medium text-center mt-2 italic">
+              * ข้อมูลตรงกับโครงสร้างบัญชีมาตรฐานในภาพอ้างอิงของคุณ
+            </div>
+          </div>
+        )}
 
       </div>
 

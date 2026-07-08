@@ -223,6 +223,7 @@ interface UserManagementProps {
   onAddUser: (newUser: User) => void;
   onDeleteUser: (username: string) => void;
   onUpdateUserPass: (username: string, newPass: string) => void;
+  onRestoreDefaultUsers: () => void;
   finalizedProducts: Product[] | null;
   onDeleteFinalizedProduct: (rIdx: number) => void;
   onClearAllFinalizedProducts: () => void;
@@ -235,6 +236,7 @@ export default function UserManagement({
   onAddUser,
   onDeleteUser,
   onUpdateUserPass,
+  onRestoreDefaultUsers,
   finalizedProducts,
   onDeleteFinalizedProduct,
   onClearAllFinalizedProducts,
@@ -403,7 +405,7 @@ export default function UserManagement({
   };
 
   const handleLoadRandomMockData = () => {
-    let eligibleUsers = users.filter(u => u.username.toLowerCase() !== 'admin' && u.level !== 1);
+    let eligibleUsers = users.filter(u => u.level !== 4);
     if (eligibleUsers.length === 0) {
       eligibleUsers = [
         { username: 'M-2', pass: '1234', level: 2, roleName: 'Manager', description: '' },
@@ -652,14 +654,19 @@ export default function UserManagement({
 
                 <form onSubmit={handleAdd} className="space-y-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-extrabold text-slate-400 block uppercase tracking-wider">
-                      ชื่อผู้ใช้ (Username)
-                    </label>
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-extrabold text-slate-400 block uppercase tracking-wider">
+                        ชื่อผู้ใช้ (Username)
+                      </label>
+                      <span className="text-[9px] font-bold text-rose-600/80 bg-rose-50/50 px-1.5 py-0.5 rounded-md">
+                        *อักษรแรกแผนก-รหัสพนักงาน (เช่น M-72000)
+                      </span>
+                    </div>
                     <input
                       type="text"
                       value={newUsername}
                       onChange={e => setNewUsername(e.target.value)}
-                      placeholder="เช่น M-5, S-5, Viewer-2"
+                      placeholder="เช่น M-7200, S-72001"
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:border-[#ba191a] focus:outline-none text-xs font-bold text-slate-700"
                     />
                   </div>
@@ -755,15 +762,19 @@ export default function UserManagement({
                 
                 {/* USER TABLE */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
-                  <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
+                  <div className="border-b border-slate-100 pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <h3 className="text-slate-800 font-black text-sm uppercase tracking-wide flex items-center gap-1.5">
                       <Shield className="w-4 h-4 text-[#ba191a]" />
                       รายชื่อผู้ใช้งานและรหัสผ่านทดลองในระบบ
                     </h3>
-                    <span className="text-[10px] bg-slate-100 text-slate-500 font-extrabold px-2 py-0.5 rounded-full">
-                      ทั้งหมด {users.length} บัญชี
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] bg-slate-100 text-slate-500 font-extrabold px-2 py-0.5 rounded-full shrink-0">
+                        ทั้งหมด {users.length} บัญชี
+                      </span>
+                    </div>
                   </div>
+
+
 
                   <div className="overflow-hidden border border-slate-200 rounded-xl">
                     <table className="w-full text-left border-collapse table-fixed text-xs font-sans">
@@ -920,7 +931,7 @@ export default function UserManagement({
                       }`}
                     >
                       <FileText className="w-3.5 h-3.5" />
-                      <span>รายการบันทึกดิบละเอียด ({(finalizedProducts || []).length})</span>
+                      <span>รายการบันทึกดิบละเอียด</span>
                     </button>
                   </div>
                 </div>

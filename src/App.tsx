@@ -37,15 +37,29 @@ export default function App() {
   // User Accounts list state (persisted in localStorage)
   const [users, setUsers] = useState<User[]>(() => {
     const cached = localStorage.getItem('farmhouse_users');
+    let loadedUsers: User[] = [];
     if (cached) {
       try {
-        return JSON.parse(cached) as User[];
+        loadedUsers = JSON.parse(cached) as User[];
       } catch (e) {
-        return INITIAL_USERS as User[];
+        loadedUsers = INITIAL_USERS as User[];
       }
+    } else {
+      loadedUsers = INITIAL_USERS as User[];
     }
-    localStorage.setItem('farmhouse_users', JSON.stringify(INITIAL_USERS));
-    return INITIAL_USERS as User[];
+
+    // Ensure ALL INITIAL_USERS are present. If any are missing, merge them!
+    const existingUsernames = new Set(loadedUsers.map(u => u.username.toLowerCase()));
+    const missingUsers = (INITIAL_USERS as User[]).filter(u => !existingUsernames.has(u.username.toLowerCase()));
+    
+    if (missingUsers.length > 0) {
+      const merged = [...loadedUsers, ...missingUsers];
+      localStorage.setItem('farmhouse_users', JSON.stringify(merged));
+      return merged;
+    }
+    
+    localStorage.setItem('farmhouse_users', JSON.stringify(loadedUsers));
+    return loadedUsers;
   });
 
   // Authentication access control state (Session-scoped for excellent UX)
@@ -138,19 +152,9 @@ export default function App() {
     return localStorage.getItem('farmhouse_current_date') || todayStr;
   });
 
-  // Automated "New Day Detection and System Reset"
+  // Automated "New Day Detection and System Reset" checking every second
   useEffect(() => {
-    const todayStr = (() => {
-      const d = new Date();
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      return `${yyyy}-${mm}-${dd}`;
-    })();
-
-    const storedDate = localStorage.getItem('farmhouse_current_date');
-    if (storedDate && storedDate !== todayStr) {
-      // Auto-reset everything for the new day
+    const performNewDayReset = (todayStr: string) => {
       setCurrentDate(todayStr);
       localStorage.setItem('farmhouse_current_date', todayStr);
 
@@ -173,9 +177,43 @@ export default function App() {
       localStorage.setItem('farmhouse_formula_approved', 'false');
 
       setSelectedFormula(null);
-    } else if (!storedDate) {
-      localStorage.setItem('farmhouse_current_date', todayStr);
-    }
+    };
+
+    const checkNextDayTransition = () => {
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const todayStr = `${yyyy}-${mm}-${dd}`;
+
+      const storedDate = localStorage.getItem('farmhouse_current_date');
+      if (storedDate && storedDate !== todayStr) {
+        const h = now.getHours();
+        const m = now.getMinutes();
+        const s = now.getSeconds();
+
+        // Check if we are past 00:00:01 AM of the new day
+        if (h > 0 || m > 0 || s >= 1) {
+          console.log("Automatic new day transition triggered at 00:00:01 or later:", todayStr);
+          performNewDayReset(todayStr);
+          
+          triggerConfirm(
+            "ขึ้นวันใหม่สำเร็จ (Auto New Day)",
+            `ระบบได้เข้าสู่การทำงานวันใหม่ (${todayStr}) เรียบร้อยแล้ว (เวลาเลย 00.00.01 น.) ระบบได้ทำการปลดล็อกและเคลียร์ข้อมูลสำหรับการทำงานรอบใหม่แล้ว`,
+            () => {}
+          );
+        }
+      } else if (!storedDate) {
+        localStorage.setItem('farmhouse_current_date', todayStr);
+      }
+    };
+
+    // Run once immediately on mount
+    checkNextDayTransition();
+
+    // Set up 1-second interval ticker
+    const intervalId = setInterval(checkNextDayTransition, 1000);
+    return () => clearInterval(intervalId);
   }, []);
 
   const formatThaiDate = (dateStr: string) => {
@@ -455,7 +493,16 @@ export default function App() {
       return;
     }
 
-    // Level 1, 2, and 3 can finalize/lock the system for the day
+    if (currentUser?.level !== 1 && currentUser?.level !== 2) {
+      triggerConfirm(
+        "สิทธิ์ไม่เพียงพอในการล็อกระบบ",
+        "เฉพาะหัวหน้างาน (Level 2) หรือผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถกดยืนยันบันทึกสรุปส่วนกลางและล็อกระบบประจำวันได้",
+        () => {}
+      );
+      return;
+    }
+
+    // Level 1 and 2 can finalize/lock the system for the day
     triggerConfirm(
       "บันทึกและยืนยันข้อมูลสรุปส่วนกลาง",
       "คุณยืนยันที่จะบันทึกผลการคำนวณลงตารางสรุปใช่หรือไม่? ข้อมูลบนกระดานทดลองส่วนตัวของคุณจะถูกนำเข้าไปบันทึกร่วมกับสมาชิกผู้ใช้อื่นในรายงานสรุปส่วนกลางด้านล่าง",
@@ -678,6 +725,11 @@ export default function App() {
     }
   };
 
+  const handleRestoreDefaultUsers = () => {
+    setUsers(INITIAL_USERS);
+    localStorage.setItem('farmhouse_users', JSON.stringify(INITIAL_USERS));
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-800">
       
@@ -779,6 +831,7 @@ export default function App() {
               onAddUser={handleAddUser}
               onDeleteUser={handleDeleteUser}
               onUpdateUserPass={handleUpdateUserPass}
+              onRestoreDefaultUsers={handleRestoreDefaultUsers}
               finalizedProducts={finalizedProducts}
               onDeleteFinalizedProduct={handleDeleteFinalizedProduct}
               onClearAllFinalizedProducts={handleClearAllFinalizedProducts}
@@ -818,14 +871,14 @@ export default function App() {
                         {formatThaiDate(currentDate)}
                       </span>
                       {finalizedProducts !== null ? (
-                        <span className="text-[10px] md:text-xs bg-emerald-100 border border-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full font-black flex items-center gap-1.5 animate-fade-in">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          ยืนยันแล้ว
+                        <span className="text-[10px] md:text-xs bg-rose-100 border border-rose-200 text-rose-800 px-2 py-0.5 rounded-full font-black flex items-center gap-1.5 animate-fade-in">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                          ล็อกระบบแล้ว (Locked)
                         </span>
                       ) : (
-                        <span className="text-[10px] md:text-xs bg-rose-100 border border-rose-200 text-rose-800 px-2 py-0.5 rounded-full font-black flex items-center gap-1.5 animate-fade-in">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-                          ยังไม่ได้รับการยืนยัน
+                        <span className="text-[10px] md:text-xs bg-emerald-100 border border-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full font-black flex items-center gap-1.5 animate-fade-in">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          ยังไม่ล็อก (Unlocked)
                         </span>
                       )}
                     </div>
@@ -849,25 +902,25 @@ export default function App() {
                 </div>
               )}
 
-              {/* Session status banner (Dynamic color based on finalizedProducts status) */}
+              {/* Session status banner (Dynamic color based on finalizedProducts status: Red if Locked, Green if Unlocked) */}
               {finalizedProducts !== null ? (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in">
+                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-emerald-100 rounded-xl text-emerald-700">
+                    <div className="p-2 bg-rose-100 rounded-xl text-rose-700">
                       <Shield className="w-5 h-5 shrink-0" />
                     </div>
                     <div>
-                      <h4 className="font-extrabold text-slate-800 text-sm">ยืนยันและสรุปข้อมูลวันปัจจุบันเรียบร้อยแล้ว (Locked Today's Session)</h4>
-                      <p className="text-slate-500 font-bold text-xs">
-                        {currentUser?.level === 1 
-                          ? "แผนงาน Presale วันนี้ถูกบันทึกเรียบร้อยแล้ว แต่เนื่องจากคุณเป็น Admin คุณจึงยังมีสิทธิ์แก้ไขข้อมูลและอนุมัติสูตรได้ หรือปลดล็อกเพื่อให้เจ้าหน้าที่คนอื่นแก้ไขได้" 
-                          : "แผนงาน Presale วันนี้ถูกบันทึกและส่งยันข้อมูลสรุปขั้นสุดท้ายเรียบร้อยแล้ว บอร์ดระบบอยู่ในสถานะฟรีซข้อมูล (Locked) ไม่สามารถทำการปรับเปลี่ยนใดๆ เพิ่มเติมได้ในขณะนี้"
+                      <h4 className="font-extrabold text-rose-800 text-sm">ล็อกระบบและข้อมูลเรียบร้อยแล้ว (Locked Today's Session)</h4>
+                      <p className="text-rose-600 font-bold text-xs">
+                        {currentUser?.level === 1 || currentUser?.level === 2
+                          ? "แผนงาน Presale วันนี้ถูกบันทึกและบล็อกการแก้ไขแล้ว เนื่องจากคุณเป็น Admin หรือ Manager คุณมีสิทธิ์กดปลดล็อกเพื่อให้แก้ไขข้อมูลใหม่ได้" 
+                          : "แผนงาน Presale วันนี้ถูกบันทึกและส่งยันข้อมูลสรุปขั้นสุดท้ายเรียบร้อยแล้ว บอร์ดระบบอยู่ในสถานะฟรีซข้อมูล (Locked สีแดง) ไม่สามารถทำการปรับเปลี่ยนใดๆ เพิ่มเติมได้ในขณะนี้"
                         }
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {currentUser?.level === 1 && (
+                    {(currentUser?.level === 1 || currentUser?.level === 2) && (
                       <button
                         type="button"
                         onClick={() => {
@@ -880,29 +933,29 @@ export default function App() {
                             }
                           );
                         }}
-                        className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase rounded-xl shadow transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase rounded-xl shadow transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
                       >
-                        <span>🔓 ปลดล็อกระบบ (Admin)</span>
+                        <span>🔓 ปลดล็อกระบบ (Admin/Manager)</span>
                       </button>
                     )}
-                    <span className="text-[10px] bg-emerald-200 text-emerald-800 px-3 py-1.5 rounded-full font-black uppercase shrink-0">Data Locked</span>
+                    <span className="text-[10px] bg-rose-600 text-white px-3 py-1.5 rounded-full font-black uppercase shrink-0">Data Locked</span>
                   </div>
                 </div>
               ) : (
-                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in">
                   <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-rose-100 rounded-xl text-rose-600 animate-pulse">
+                    <div className="p-2.5 bg-emerald-100 rounded-xl text-emerald-600 animate-pulse">
                       <Clock className="w-5 h-5 shrink-0" />
                     </div>
                     <div>
-                      <h4 className="font-extrabold text-slate-800 text-sm">ยังไม่ได้รับการยืนยันและสรุปข้อมูล (Pending Daily Finalization)</h4>
-                      <p className="text-slate-500 font-bold text-xs">
-                        แผนงาน Presale ประจำวันนี้ยังไม่ได้กดยืนยันจัดทำรายงานสรุปขั้นสุดท้าย คุณยังคงแก้ไขสูตรและแผนงานคำนวณด้านบนได้ เมื่อเรียบร้อยแล้ว กรุณากดปุ่ม "บันทึกและยืนยัน (XLSX)" ด้านล่างสุดเพื่อส่งรายงาน
+                      <h4 className="font-extrabold text-emerald-800 text-sm">ยังไม่ได้รับการยืนยันและสรุปข้อมูล (Pending Daily Finalization - สีเขียว)</h4>
+                      <p className="text-emerald-600 font-bold text-xs">
+                        แผนงาน Presale ประจำวันนี้ยังไม่ได้ล็อก (ยังแก้ไขได้ปกติ) เมื่อเรียบร้อยแล้ว เฉพาะผู้มีสิทธิ์ (Manager หรือ Admin) เท่านั้นที่จะสามารถกดยืนยันบันทึกสรุปขั้นสุดท้ายและล็อกระบบได้
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] bg-rose-200 text-rose-800 px-3 py-1.5 rounded-full font-black uppercase shrink-0">ยังไม่ได้รับการยืนยัน</span>
+                    <span className="text-[10px] bg-emerald-600 text-white px-3 py-1.5 rounded-full font-black uppercase shrink-0">ยังไม่ล็อก (Unlocked)</span>
                   </div>
                 </div>
               )}
@@ -932,7 +985,7 @@ export default function App() {
                 }}
                 onClearFormula={() => setSelectedFormula(null)}
                 selectedCount={selectedCount}
-                readOnly={currentUser?.level === 4 || (finalizedProducts !== null && currentUser?.level !== 1 && currentUser?.level !== 2 && currentUser?.level !== 3)}
+                readOnly={currentUser?.level === 4 || finalizedProducts !== null}
               />
 
               {/* CENTRAL ACTION WORKBOOK TABLE */}
@@ -946,7 +999,7 @@ export default function App() {
                 onImportBaseProducts={handleImportBaseProducts}
                 onResetAllData={handleResetEntireBoard}
                 users={users}
-                readOnly={currentUser?.level === 4 || (finalizedProducts !== null && currentUser?.level !== 1 && currentUser?.level !== 2 && currentUser?.level !== 3)}
+                readOnly={currentUser?.level === 4 || finalizedProducts !== null}
               />
 
               {/* DAILY TILES DISPLAYING OUTCOMES COMPARED */}

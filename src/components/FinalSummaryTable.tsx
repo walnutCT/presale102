@@ -167,7 +167,8 @@ export default function FinalSummaryTable({
     selectedTimes.length > 0;
 
   const getUserDeptInfo = (username: string) => {
-    const userObj = users?.find(u => u.username.toLowerCase() === username.toLowerCase());
+    const cleanUsername = username.split(' (')[0].trim();
+    const userObj = users?.find(u => u.username.toLowerCase() === cleanUsername.toLowerCase());
     const deptName = userObj?.department || '';
 
     if (deptName) {
@@ -178,7 +179,7 @@ export default function FinalSummaryTable({
       if (uDept === 'อื่นๆ' || uDept === 'OTHER' || uDept === 'OTHERS') return { name: 'อื่นๆ', textColor: 'text-emerald-600' };
     }
 
-    const lower = username.toLowerCase();
+    const lower = cleanUsername.toLowerCase();
     if (lower === 'admin' || lower.includes('admin')) {
       return { name: 'IT', textColor: 'text-blue-600' };
     }
@@ -237,10 +238,41 @@ export default function FinalSummaryTable({
               <button
                 type="button"
                 onClick={() => {
+                  // Filter users who have permission to do presale (levels 1, 2, 3)
+                  const eligibleMakers = (users || []).filter(u => u.level !== 4);
+                  
+                  // Pick up to 3 users from our added users who have permission
+                  const m1 = eligibleMakers[0] 
+                    ? `${eligibleMakers[0].username} (${eligibleMakers[0].roleName})` 
+                    : "สมเกียรติ (Staff 1)";
+                  const m2 = eligibleMakers[1] 
+                    ? `${eligibleMakers[1].username} (${eligibleMakers[1].roleName})` 
+                    : (eligibleMakers[0] ? `${eligibleMakers[0].username} (${eligibleMakers[0].roleName})` : "วิจิตร (Manager)");
+                  const m3 = eligibleMakers[2] 
+                    ? `${eligibleMakers[2].username} (${eligibleMakers[2].roleName})` 
+                    : (eligibleMakers[1] ? `${eligibleMakers[1].username} (${eligibleMakers[1].roleName})` : (eligibleMakers[0] ? `${eligibleMakers[0].username} (${eligibleMakers[0].roleName})` : "รสริน (Staff 2)"));
+
+                  const getUsernameOnly = (fullName: string) => fullName.split(' (')[0];
+
+                  const dynamicDemoProducts = DEMO_MULTI_USER_PRODUCTS.map(p => {
+                    let addedBy = p.addedBy;
+                    if (p.addedBy?.includes("สมเกียรติ")) {
+                      addedBy = m1;
+                    } else if (p.addedBy?.includes("วิจิตร")) {
+                      addedBy = m2;
+                    } else if (p.addedBy?.includes("รสริน")) {
+                      addedBy = m3;
+                    }
+                    return {
+                      ...p,
+                      addedBy
+                    };
+                  });
+
                   triggerConfirm(
                     "โหลดข้อมูลจำลอง 3 ผู้ใช้",
-                    "คุณต้องการโหลดข้อมูลจำลองเพื่อสาธิตการรวมยอดพนักงาน 3 คน (สมเกียรติ, วิจิตร, รสริน) บันทึกยอดสินค้าเดียวกันหรือไม่?",
-                    () => onLoadDemoProducts(DEMO_MULTI_USER_PRODUCTS)
+                    `คุณต้องการโหลดข้อมูลจำลองเพื่อสาธิตการรวมยอดพนักงาน 3 คน (${getUsernameOnly(m1)}, ${getUsernameOnly(m2)}, ${getUsernameOnly(m3)}) บันทึกยอดสินค้าเดียวกันหรือไม่?`,
+                    () => onLoadDemoProducts(dynamicDemoProducts)
                   );
                 }}
                 className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-lg shadow-md transition-all active:scale-[0.98] cursor-pointer text-center"

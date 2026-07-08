@@ -18,6 +18,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { Product } from '../types';
+import * as XLSX from 'xlsx';
 import MultiSelectFilter from './MultiSelectFilter';
 
 interface PresaleTableProps {
@@ -155,7 +156,8 @@ export default function PresaleTable({
   }, {} as Record<string | number, number>);
 
   const getUserDeptInfo = (username: string) => {
-    const userObj = users?.find(u => u.username.toLowerCase() === username.toLowerCase());
+    const cleanUsername = username.split(' (')[0].trim();
+    const userObj = users?.find(u => u.username.toLowerCase() === cleanUsername.toLowerCase());
     const deptName = userObj?.department || '';
 
     if (deptName) {
@@ -166,7 +168,7 @@ export default function PresaleTable({
       if (uDept === 'อื่นๆ' || uDept === 'OTHER' || uDept === 'OTHERS') return { name: 'อื่นๆ', textColor: 'text-emerald-600' };
     }
 
-    const lower = username.toLowerCase();
+    const lower = cleanUsername.toLowerCase();
     if (lower === 'admin' || lower.includes('admin')) {
       return { name: 'IT', textColor: 'text-blue-600' };
     }
@@ -271,21 +273,88 @@ export default function PresaleTable({
   const totalOverride = sortedAndFiltered.reduce((sum, p) => sum + p.overrideQty, 0);
   const totalPrice = sortedAndFiltered.reduce((sum, p) => sum + p.price, 0);
 
-  // Simulated export to Excel
+  // Export to Excel / CSV with proper UTF-8 BOM encoding for complete Excel compatibility
   const handleExportExcel = () => {
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + ["ITEM_CODE,ITEM_NAME,MULTI_QTY,PLUS_QTY,OVERRIDE_QTY,PRICE,ADDED_BY,ADDED_TIME,DEL_DATE", 
-         ...sortedAndFiltered.map(p => `${p.code},${p.name},${p.multiQty},${p.plusQty},${p.overrideQty},${p.price},${p.addedBy || 'ระบบ'},${p.addedAt || `${p.delDate} 08:30`},${p.delDate}`)
-        ].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `presale_summary_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (sortedAndFiltered.length === 0) {
+      showNotification("ไม่มีข้อมูลในการส่งออก!");
+      return;
+    }
 
-    showNotification("ส่งออกไฟล์ Excel สำเร็จ!");
+    const dateStr = new Date().toISOString().split('T')[0];
+    const fileName = `presale_summary_${dateStr}`;
+
+    try {
+      // 1. Map products into flat sheet representation
+      const rawSheetData = sortedAndFiltered.map((p, idx) => ({
+        'ลำดับ (No.)': idx + 1,
+        'รหัสสินค้า (ITEM CODE)': p.code,
+        'ชื่อสินค้า (ITEM NAME)': p.name,
+        'ยอดตัวคูณ (MULTI_QTY)': p.multiQty,
+        'ยอดบวกเพิ่ม (PLUS_QTY)': p.plusQty,
+        'ยอดปรับปรุงสุทธิ (OVERRIDE_QTY)': p.overrideQty,
+        'มูลค่า (PRICE THB)': p.price,
+        'ผู้บันทึก (USER)': p.addedBy || 'ระบบ',
+        'เวลาบันทึก (TIME)': p.addedAt ? new Date(p.addedAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '-',
+        'วันส่งมอบ (DEL_DATE)': p.delDate
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(rawSheetData);
+      
+      // Force column string type for Item Code to avoid Excel truncating leading zeros
+      const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:A1');
+      for (let r = range.s.r + 1; r <= range.e.r; ++r) {
+        const cellAddress = XLSX.utils.encode_cell({ r, c: 1 }); // Column index 1 is ITEM CODE
+        const cell = worksheet[cellAddress];
+        if (cell) {
+          cell.t = 's'; // Force string type
+          cell.v = String(cell.v);
+        }
+      }
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Presale Summary');
+      XLSX.writeFile(workbook, `${fileName}.xlsx`);
+      showNotification("ส่งออกไฟล์ Excel (.xlsx) สำเร็จ!");
+    } catch (err) {
+      console.error('Failed to export Excel, falling back to CSV format:', err);
+      // Fallback CSV Export with BOM character for Excel Thai language compatibility (UTF-8)
+      const headers = [
+        'No.',
+        'ITEM CODE',
+        'ITEM NAME',
+        'MULTI_QTY',
+        'PLUS_QTY',
+        'OVERRIDE_QTY',
+        'PRICE',
+        'ADDED_BY',
+        'ADDED_TIME',
+        'DEL_DATE'
+      ];
+      
+      const rows = sortedAndFiltered.map((p, idx) => [
+        idx + 1,
+        `="${p.code}"`, // Force Excel string import prefix to prevent numeric sci-notation/stripping
+        `"${p.name.replace(/"/g, '""')}"`,
+        p.multiQty,
+        p.plusQty,
+        p.overrideQty,
+        p.price,
+        `="${p.addedBy || 'ระบบ'}"`,
+        `="${p.addedAt ? new Date(p.addedAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '-'}"`,
+        `="${p.delDate}"`
+      ]);
+
+      const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `${fileName}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showNotification("ส่งออกไฟล์ สำเร็จ! (รูปแบบสำรอง .csv)");
+    }
   };
 
   // Simulated Print handler
@@ -368,7 +437,7 @@ export default function PresaleTable({
           <button
             onClick={handleExportExcel}
             className="p-1.8 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded text-emerald-700 font-bold transition-all hover:scale-105"
-            title="ส่งออก Excel (.csv)"
+            title="ส่งออกรายงาน Excel (.xlsx)"
           >
             <FileSpreadsheet className="w-4 h-4" />
           </button>
