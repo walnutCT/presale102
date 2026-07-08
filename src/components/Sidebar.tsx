@@ -142,8 +142,8 @@ export default function Sidebar({
     return products.filter(p => {
       // Search Box filter
       if (filters.searchProduct) {
-        const query = filters.searchProduct.toLowerCase();
-        const match = p.name.toLowerCase().includes(query) || p.code.includes(query);
+        const query = filters.searchProduct.toLowerCase().trim();
+        const match = p.name.toLowerCase().includes(query) || p.code.toLowerCase().includes(query);
         if (!match) return false;
       }
 

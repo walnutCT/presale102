@@ -821,8 +821,14 @@ export default function RecipeConfigPanel({
   // Helper to check if a product is targeted by the sidebar formula select controls
   const isTargetOfFormula = (p: Product, flts: StoreFilterState) => {
     // Check specific searchProduct text if entered
-    if (flts.searchProduct && !p.code.includes(flts.searchProduct)) {
-      return false;
+    if (flts.searchProduct) {
+      const q = flts.searchProduct.toLowerCase().trim();
+      const code = (p.code || '').toLowerCase();
+      const name = (p.name || '').toLowerCase();
+      const category = (p.category || '').toLowerCase();
+      if (!code.includes(q) && !name.includes(q) && !category.includes(q)) {
+        return false;
+      }
     }
 
     // Check custom checked category array

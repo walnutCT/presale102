@@ -5,7 +5,218 @@
 
 import React, { useState } from 'react';
 import { User, Product } from '../types';
-import { Users, Shield, Trash2, Plus, Key, CheckCircle, Info, Search, FileText, BarChart2, Calendar } from 'lucide-react';
+import { Users, Shield, Trash2, Plus, Key, CheckCircle, Info, Search, FileText, BarChart2, Calendar, ArrowUpDown, ChevronDown, Check, X, Filter } from 'lucide-react';
+import { INITIAL_PRODUCTS } from '../data';
+
+interface MultiSelectFilterProps {
+  title: string;
+  options: (string | number)[];
+  selected: (string | number)[];
+  onChange: (newSelected: any[]) => void;
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  optionCounts?: Record<string | number, number>;
+  renderLabel?: (val: any) => React.ReactNode;
+  placeholder: string;
+  dropdownWidth?: string;
+}
+
+function MultiSelectFilter({
+  title,
+  options,
+  selected,
+  onChange,
+  isOpen,
+  onToggle,
+  onClose,
+  optionCounts,
+  renderLabel,
+  placeholder,
+  dropdownWidth = "w-52"
+}: MultiSelectFilterProps) {
+  const [search, setSearch] = useState('');
+
+  React.useEffect(() => {
+    if (!isOpen) {
+      setSearch('');
+    }
+  }, [isOpen]);
+
+  const filteredOptions = options.filter(opt => {
+    const labelStr = renderLabel ? String(opt) : String(opt);
+    // If we have a custom renderLabel, let's convert the rendered element/string to search text safely
+    const customLabel = renderLabel ? renderLabel(opt) : null;
+    const searchText = typeof customLabel === 'string' 
+      ? customLabel 
+      : (customLabel && React.isValidElement(customLabel))
+      ? String((customLabel.props as any).children || opt)
+      : String(opt);
+
+    return searchText.toLowerCase().includes(search.toLowerCase());
+  });
+
+  const handleToggleOption = (opt: string | number) => {
+    if (selected.includes(opt)) {
+      onChange(selected.filter(x => x !== opt));
+    } else {
+      onChange([...selected, opt]);
+    }
+  };
+
+  const handleSelectAll = () => {
+    onChange(options);
+  };
+
+  const handleClearAll = () => {
+    onChange([]);
+  };
+
+  return (
+    <div className="relative inline-block text-left w-full select-none">
+      {/* Dropdown trigger button */}
+      <div
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        className={`flex items-center justify-between bg-white hover:bg-slate-50 border ${
+          selected.length > 0 ? 'border-rose-500 ring-2 ring-rose-200' : 'border-slate-200'
+        } rounded-lg px-2.5 py-1.5 shadow-sm cursor-pointer transition-all gap-1 text-[11px] font-bold text-slate-700 min-h-[32px]`}
+      >
+        <span className="truncate max-w-[120px] font-bold">
+          {selected.length === 0
+            ? placeholder
+            : selected.length === options.length
+            ? `ทั้งหมด (${options.length})`
+            : `${selected.length} รายการ`}
+        </span>
+        <div className="flex items-center gap-1 shrink-0">
+          {selected.length > 0 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClearAll();
+              }}
+              className="p-0.5 rounded-full hover:bg-rose-100 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+            >
+              <X className="w-2.5 h-2.5" />
+            </button>
+          )}
+          <ChevronDown className={`w-3.5 h-3.5 text-slate-450 transition-transform duration-200 ${isOpen ? 'rotate-180 text-rose-650' : ''}`} />
+        </div>
+      </div>
+
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <>
+          {/* Transparent click-outside overlay */}
+          <div 
+            className="fixed inset-0 z-[100] bg-transparent cursor-default" 
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }} 
+          />
+
+          <div className={`absolute left-1/2 -translate-x-1/2 md:translate-x-0 md:left-0 mt-1.5 ${dropdownWidth} bg-white border border-rose-100 rounded-xl shadow-xl z-[110] py-2.5 flex flex-col gap-2 focus:outline-none animate-in fade-in slide-in-from-top-1 duration-100`}>
+            {/* Header / Search */}
+            <div className="px-2.5 pb-1.5 border-b border-slate-100">
+              <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+                <Search className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={`ค้นหา${title}...`}
+                  className="w-full bg-transparent border-none outline-none text-[11px] font-bold text-slate-700 placeholder:text-slate-400"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSearch('');
+                    }}
+                    className="text-slate-400 hover:text-rose-600 text-[10.5px] font-black cursor-pointer pl-1"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="flex items-center justify-between px-3 py-0.5 text-[10px] font-black text-slate-500 select-none">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSelectAll();
+                }}
+                className="hover:text-rose-650 transition-colors cursor-pointer"
+              >
+                ✓ เลือกทั้งหมด
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleClearAll();
+                }}
+                className="hover:text-rose-650 transition-colors cursor-pointer"
+              >
+                ✗ ล้างทั้งหมด
+              </button>
+            </div>
+
+            {/* Options List */}
+            <div className="max-h-52 overflow-y-auto px-1.5 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+              {filteredOptions.length === 0 ? (
+                <div className="px-2.5 py-4 text-center text-slate-400 text-[11px] italic font-semibold">
+                  ไม่พบตัวเลือก
+                </div>
+              ) : (
+                filteredOptions.map((opt) => {
+                  const isChecked = selected.includes(opt);
+                  const count = optionCounts ? optionCounts[opt] : undefined;
+                  const label = renderLabel ? renderLabel(opt) : String(opt);
+
+                  return (
+                    <div
+                      key={String(opt)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleOption(opt);
+                      }}
+                      className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-rose-50/70 cursor-pointer text-[11px] text-slate-700 font-bold transition-colors select-none"
+                    >
+                      <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${
+                        isChecked 
+                          ? 'bg-rose-600 border-rose-600 text-white shadow-sm' 
+                          : 'border-slate-300 bg-white hover:border-slate-400'
+                      }`}>
+                        {isChecked && <Check className="w-3 h-3 stroke-[3.5]" />}
+                      </div>
+                      <span className="truncate flex-1 text-left">{label}</span>
+                      {count !== undefined && (
+                        <span className="text-[10px] bg-slate-100 text-slate-600 rounded-md px-1.5 py-0.5 font-mono shrink-0 font-bold">
+                          {count}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 interface UserManagementProps {
   users: User[];
@@ -16,6 +227,7 @@ interface UserManagementProps {
   onDeleteFinalizedProduct: (rIdx: number) => void;
   onClearAllFinalizedProducts: () => void;
   triggerConfirm: (title: string, message: string, onConfirm: () => void) => void;
+  onLoadDemoProducts: (demoProducts: Product[]) => void;
 }
 
 export default function UserManagement({
@@ -26,11 +238,13 @@ export default function UserManagement({
   finalizedProducts,
   onDeleteFinalizedProduct,
   onClearAllFinalizedProducts,
-  triggerConfirm
+  triggerConfirm,
+  onLoadDemoProducts
 }: UserManagementProps) {
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('1234');
   const [newLevel, setNewLevel] = useState<number>(3); // Default to Staff (Level 3)
+  const [newDept, setNewDept] = useState<string>('IT');
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [editPassValue, setEditPassValue] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -38,8 +252,58 @@ export default function UserManagement({
   
   // States for Admin Work Summary Panel
   const [summaryTab, setSummaryTab] = useState<'grouped' | 'raw_logs'>('grouped');
-  const [summarySearch, setSummarySearch] = useState('');
   const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'data_summary'>('users');
+
+  // Fine-grained Column Filters
+  const [filterUsername, setFilterUsername] = useState('');
+  const [filterProductCode, setFilterProductCode] = useState('');
+  const [filterProductName, setFilterProductName] = useState('');
+  const [filterAddedBy, setFilterAddedBy] = useState('');
+  const [filterRawDept, setFilterRawDept] = useState('');
+  const [filterRawTime, setFilterRawTime] = useState('');
+  const [filterDept, setFilterDept] = useState<string>('ALL');
+
+  // Column-specific filters for Grouped User Performance Summary
+  const [groupFilterUser, setGroupFilterUser] = useState('');
+  const [groupFilterRole, setGroupFilterRole] = useState('');
+  const [groupFilterDept, setGroupFilterDept] = useState('');
+  const [groupFilterRecords, setGroupFilterRecords] = useState('');
+  const [groupFilterMulti, setGroupFilterMulti] = useState('');
+  const [groupFilterPlus, setGroupFilterPlus] = useState('');
+  const [groupFilterNet, setGroupFilterNet] = useState('');
+  const [groupFilterPrice, setGroupFilterPrice] = useState('');
+  const [groupFilterTime, setGroupFilterTime] = useState('');
+
+  // Open dropdown tracker state
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
+  // Grouped Performance Multi-Select Dropdowns
+  const [groupSelUser, setGroupSelUser] = useState<(string | number)[]>([]);
+  const [groupSelRole, setGroupSelRole] = useState<(string | number)[]>([]);
+  const [groupSelDept, setGroupSelDept] = useState<(string | number)[]>([]);
+  const [groupSelRecords, setGroupSelRecords] = useState<(string | number)[]>([]);
+  const [groupSelMulti, setGroupSelMulti] = useState<(string | number)[]>([]);
+  const [groupSelPlus, setGroupSelPlus] = useState<(string | number)[]>([]);
+  const [groupSelNet, setGroupSelNet] = useState<(string | number)[]>([]);
+  const [groupSelPrice, setGroupSelPrice] = useState<(string | number)[]>([]);
+  const [groupSelTime, setGroupSelTime] = useState<(string | number)[]>([]);
+
+  // Raw Logs Multi-Select Dropdowns
+  const [rawSelCode, setRawSelCode] = useState<(string | number)[]>([]);
+  const [rawSelName, setRawSelName] = useState<(string | number)[]>([]);
+  const [rawSelAddedBy, setRawSelAddedBy] = useState<(string | number)[]>([]);
+  const [rawSelDept, setRawSelDept] = useState<(string | number)[]>([]);
+  const [rawSelTime, setRawSelTime] = useState<(string | number)[]>([]);
+  const [rawSelMulti, setRawSelMulti] = useState<(string | number)[]>([]);
+  const [rawSelPlus, setRawSelPlus] = useState<(string | number)[]>([]);
+  const [rawSelNet, setRawSelNet] = useState<(string | number)[]>([]);
+  const [rawSelPrice, setRawSelPrice] = useState<(string | number)[]>([]);
+
+  // Sorting States
+  const [groupedSortField, setGroupedSortField] = useState<string>('username');
+  const [groupedSortDirection, setGroupedSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [rawSortField, setRawSortField] = useState<string>('code');
+  const [rawSortDirection, setRawSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Role names mapping based on level
   const getRoleInfo = (level: number): { roleName: 'Admin' | 'Manager' | 'Staff' | 'Viewer'; duties: string } => {
@@ -54,6 +318,167 @@ export default function UserManagement({
       default:
         return { roleName: 'Viewer', duties: 'ดูรายงานอย่างเดียว แก้ไขไม่ได้' };
     }
+  };
+
+  const getUserDeptInfo = (username: string) => {
+    // Look up in users list if they have an explicit department set
+    const userObj = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+    const deptName = userObj?.department || '';
+
+    if (deptName) {
+      const uDept = deptName.toUpperCase();
+      if (uDept === 'IT') {
+        return {
+          name: 'IT',
+          badge: 'bg-blue-100 text-blue-800 border border-blue-300 px-2.5 py-0.5 rounded-full font-black text-[10px] tracking-wider uppercase',
+          bgRow: 'bg-blue-50/20 hover:bg-blue-100/30 text-blue-900 border-b border-blue-100/40 transition-colors',
+          badgeColor: 'bg-blue-100 text-blue-800',
+          textColor: 'text-blue-600'
+        };
+      }
+      if (uDept === 'SALE') {
+        return {
+          name: 'SALE',
+          badge: 'bg-yellow-100 text-amber-805 border border-yellow-350 px-2.5 py-0.5 rounded-full font-black text-[10px] tracking-wider uppercase',
+          bgRow: 'bg-yellow-50/30 hover:bg-yellow-100/40 text-amber-950 border-b border-yellow-150/40 transition-colors',
+          badgeColor: 'bg-yellow-100 text-amber-900',
+          textColor: 'text-amber-600'
+        };
+      }
+      if (uDept === 'MARKETING') {
+        return {
+          name: 'MARKETING',
+          badge: 'bg-purple-100 text-purple-800 border border-purple-200 px-2.5 py-0.5 rounded-full font-black text-[10px] tracking-wider uppercase',
+          bgRow: 'bg-purple-50/20 hover:bg-purple-100/30 text-purple-900 border-b border-purple-100/40 transition-colors',
+          badgeColor: 'bg-purple-100 text-purple-850',
+          textColor: 'text-purple-600'
+        };
+      }
+      if (uDept === 'อื่นๆ' || uDept === 'OTHER' || uDept === 'OTHERS') {
+        return {
+          name: 'อื่นๆ',
+          badge: 'bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-full font-black text-[10px] tracking-wider uppercase',
+          bgRow: 'bg-emerald-50/20 hover:bg-emerald-100/30 text-emerald-900 border-b border-emerald-100/40 transition-colors',
+          badgeColor: 'bg-emerald-100 text-emerald-800',
+          textColor: 'text-emerald-600'
+        };
+      }
+    }
+
+    const lower = username.toLowerCase();
+    if (lower === 'admin') {
+      return {
+        name: 'IT',
+        badge: 'bg-blue-100 text-blue-800 border border-blue-300 px-2.5 py-0.5 rounded-full font-black text-[10px] tracking-wider uppercase',
+        bgRow: 'bg-blue-50/20 hover:bg-blue-100/30 text-[#0f4b82] border-b border-blue-100/40 transition-colors',
+        badgeColor: 'bg-blue-100 text-blue-800',
+        textColor: 'text-blue-600'
+      };
+    }
+    if (lower.startsWith('s')) {
+      return {
+        name: 'SALE',
+        badge: 'bg-yellow-100 text-amber-805 border border-yellow-350 px-2.5 py-0.5 rounded-full font-black text-[10px] tracking-wider uppercase',
+        bgRow: 'bg-yellow-50/30 hover:bg-yellow-100/40 text-amber-950 border-b border-yellow-150/40 transition-colors',
+        badgeColor: 'bg-yellow-100 text-amber-900',
+        textColor: 'text-amber-600'
+      };
+    }
+    if (lower.startsWith('m')) {
+      return {
+        name: 'MARKETING',
+        badge: 'bg-purple-100 text-purple-800 border border-purple-200 px-2.5 py-0.5 rounded-full font-black text-[10px] tracking-wider uppercase',
+        bgRow: 'bg-purple-50/20 hover:bg-purple-100/30 text-purple-900 border-b border-purple-100/40 transition-colors',
+        badgeColor: 'bg-purple-100 text-purple-850',
+        textColor: 'text-purple-600'
+      };
+    }
+    return {
+      name: 'อื่นๆ',
+      badge: 'bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-full font-black text-[10px] tracking-wider uppercase',
+      bgRow: 'bg-emerald-50/20 hover:bg-emerald-100/30 text-emerald-900 border-b border-emerald-100/40 transition-colors',
+      badgeColor: 'bg-emerald-100 text-emerald-800',
+      textColor: 'text-emerald-600'
+    };
+  };
+
+  const handleLoadRandomMockData = () => {
+    let eligibleUsers = users.filter(u => u.username.toLowerCase() !== 'admin' && u.level !== 1);
+    if (eligibleUsers.length === 0) {
+      eligibleUsers = [
+        { username: 'M-2', pass: '1234', level: 2, roleName: 'Manager', description: '' },
+        { username: 'S-2', pass: '1234', level: 2, roleName: 'Manager', description: '' },
+        { username: 'M-3', pass: '1234', level: 3, roleName: 'Staff', description: '' },
+        { username: 'S-3', pass: '1234', level: 3, roleName: 'Staff', description: '' },
+      ];
+    }
+
+    const d = new Date();
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const todayFormatted = `${dd}/${mm}/${yyyy}`;
+
+    const newLogs: Product[] = [];
+
+    // Let's pick 3-4 random eligible users to simulate multi-user work
+    const numUsersToUse = Math.min(eligibleUsers.length, Math.floor(Math.random() * 2) + 3); // 3 to 4 users
+    const shuffledUsers = [...eligibleUsers].sort(() => Math.random() - 0.5);
+    const usersToGenerate = shuffledUsers.slice(0, numUsersToUse);
+
+    usersToGenerate.forEach((usr, usrIdx) => {
+      // Pick 5 to 9 random products from initial products list
+      const shuffledProducts = [...INITIAL_PRODUCTS].sort(() => Math.random() - 0.5);
+      const numProducts = Math.floor(Math.random() * 5) + 5; // 5 to 9 products
+      const selectedProducts = shuffledProducts.slice(0, numProducts);
+
+      selectedProducts.forEach((p, pIdx) => {
+        const multiQty = Math.floor(Math.random() * 120) + 15; // random baseline 15 to 135
+        const choice = Math.random();
+        let plusQty = multiQty;
+        
+        if (choice < 0.45) {
+          // Increase
+          plusQty = multiQty + Math.floor(Math.random() * 35) + 5;
+        } else if (choice < 0.8) {
+          // Decrease
+          plusQty = Math.max(0, multiQty - Math.floor(Math.random() * 25) - 5);
+        } else if (choice < 0.9) {
+          // Reset to 0
+          plusQty = 0;
+        }
+
+        const overrideQty = plusQty > 0 ? (plusQty - multiQty) : -multiQty;
+        const price = overrideQty * p.unitPrice;
+
+        // Generate spaced out times on today's logs to look authentic (e.g., minutes ago)
+        const minutesAgo = (usrIdx * 50) + (pIdx * 10) + Math.floor(Math.random() * 10);
+        const dLog = new Date(Date.now() - minutesAgo * 60 * 1000);
+        const logDD = String(dLog.getDate()).padStart(2, '0');
+        const logMM = String(dLog.getMonth() + 1).padStart(2, '0');
+        const logYYYY = dLog.getFullYear();
+        const logHH = String(dLog.getHours()).padStart(2, '0');
+        const logMin = String(dLog.getMinutes()).padStart(2, '0');
+        const addedAt = `${logDD}/${logMM}/${logYYYY} ${logHH}:${logMin}`;
+
+        newLogs.push({
+          ...p,
+          id: `mock-${usr.username}-${p.id}`,
+          multiQty,
+          plusQty,
+          overrideQty,
+          price,
+          addedBy: usr.username,
+          addedAt,
+          delDate: todayFormatted,
+          selected: true
+        });
+      });
+    });
+
+    onLoadDemoProducts(newLogs);
+    setSuccessMsg(`สุ่มสร้างข้อมูลจำลองพรีเซลล์จำนวน ${newLogs.length} รายการ จากผู้ใช้งานที่เลือก ${usersToGenerate.length} คน เรียบร้อยแล้ว!`);
+    setTimeout(() => setSuccessMsg(null), 4000);
   };
 
   const handleAdd = (e: React.FormEvent) => {
@@ -78,7 +503,8 @@ export default function UserManagement({
       pass: newPassword,
       level: newLevel,
       roleName,
-      description: duties
+      description: duties,
+      department: newDept
     };
 
     onAddUser(newUser);
@@ -170,7 +596,7 @@ export default function UserManagement({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         {/* LEFT SIDEBAR NAVIGATION PANEL (Span 3) */}
-        <div className="lg:col-span-3 bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-2 sticky top-24">
+        <div className="lg:col-span-3 bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-2 sticky top-6">
           <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider px-2 pb-2.5 border-b border-slate-100 flex items-center justify-between">
             <span>เมนูผู้ดูแลระบบ (Admin Menu)</span>
             <span className="bg-rose-50 text-[#ba191a] text-[9px] px-1.5 py-0.5 rounded font-black">ระดับ 1</span>
@@ -188,7 +614,7 @@ export default function UserManagement({
             <Users className="w-5 h-5 text-[#ba191a] shrink-0" />
             <div className="text-left">
               <div className="font-extrabold text-[12px]">จัดการสิทธิ์ผู้ใช้งาน</div>
-              <div className="text-[9.5px] opacity-70 font-bold">เพิ่ม/ลบ สิทธิ์และรหัสผ่าน ({users.length})</div>
+              <div className="text-[9.5px] opacity-70 font-bold">เพิ่ม/ลบ สิทธิ์และรหัสผ่าน</div>
             </div>
           </button>
           
@@ -284,6 +710,36 @@ export default function UserManagement({
                     </div>
                   </div>
 
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-extrabold text-slate-400 block uppercase tracking-wider">
+                      แผนก (Department)
+                    </label>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {[
+                        { key: 'IT', label: 'IT', bg: 'bg-blue-100 border-blue-300 text-blue-850' },
+                        { key: 'SALE', label: 'SALE', bg: 'bg-yellow-100 border-yellow-350 text-amber-900' },
+                        { key: 'MARKETING', label: 'MARKETING', bg: 'bg-purple-100 border-purple-250 text-purple-850' },
+                        { key: 'อื่นๆ', label: 'อื่นๆ', bg: 'bg-emerald-100 border-emerald-300 text-emerald-850' }
+                      ].map(dept => {
+                        const isSelected = newDept === dept.key;
+                        return (
+                          <button
+                            key={dept.key}
+                            type="button"
+                            onClick={() => setNewDept(dept.key)}
+                            className={`p-2 text-center rounded-xl border text-[11px] font-black cursor-pointer transition-all ${
+                              isSelected
+                                ? `${dept.bg} ring-2 ring-[#ba191a]/20 scale-[1.02]`
+                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
+                            }`}
+                          >
+                            {dept.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <button
                     type="submit"
                     className="w-full py-2.5 bg-[#ba191a] hover:bg-[#a01516] text-white font-black text-xs uppercase rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
@@ -313,15 +769,18 @@ export default function UserManagement({
                     <table className="w-full text-left border-collapse table-fixed text-xs font-sans">
                       <thead>
                         <tr className="bg-slate-50 text-slate-500 font-extrabold uppercase border-b border-slate-200">
-                          <th className="px-4 py-2 text-center font-black text-[10px] w-[20%] border-r border-slate-200">ลำดับขั้น</th>
-                          <th className="px-4 py-2 text-center font-black text-[10px] w-[35%] border-r border-slate-200">User (ชื่อผู้ใช้งาน)</th>
-                          <th className="px-4 py-2 text-center font-black text-[10px] w-[30%] border-r border-slate-200">PASS (รหัสผ่าน)</th>
-                          <th className="px-4 py-2 text-center font-black text-[10px] w-[15%]">การดำเนินงาน</th>
+                          <th className="px-4 py-2 text-center font-black text-[10px] w-[10%] border-r border-slate-200">ลำดับขั้น</th>
+                          <th className="px-4 py-2 text-center font-black text-[10px] w-[24%] border-r border-slate-200">User (ชื่อผู้ใช้งาน)</th>
+                          <th className="px-4 py-2 text-center font-black text-[10px] w-[18%] border-r border-slate-200">ระดับสิทธิ์</th>
+                          <th className="px-4 py-2 text-center font-black text-[10px] w-[14%] border-r border-slate-200">แผนก</th>
+                          <th className="px-4 py-2 text-center font-black text-[10px] w-[22%] border-r border-slate-200">PASS (รหัสผ่าน)</th>
+                          <th className="px-4 py-2 text-center font-black text-[10px] w-[12%]">การดำเนินงาน</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
                         {users.map((user, idx) => {
                           const colors = getLevelColorClasses(user.level);
+                          const deptInfo = getUserDeptInfo(user.username);
                           return (
                             <tr key={user.username} className="hover:bg-slate-50/50 transition-colors">
                               
@@ -330,12 +789,19 @@ export default function UserManagement({
                                 {user.level}
                               </td>
                               
-                              {/* Username Row with Role color badge */}
-                              <td className="px-4 py-3 border-r border-slate-200 font-black text-slate-800 text-center flex items-center justify-center gap-2 h-full">
+                              {/* Username Row */}
+                              <td className="px-4 py-3 border-r border-slate-200 font-black text-slate-800 text-center">
                                 <span className="truncate">{user.username}</span>
-                                <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold font-mono uppercase ${colors.badge}`}>
-                                  {user.roleName}
-                                </span>
+                              </td>
+
+                              {/* Permission Level Column without color */}
+                              <td className="px-4 py-3 border-r border-slate-200 text-center font-black text-slate-700">
+                                {user.roleName}
+                              </td>
+
+                              {/* Department Column without circle badge, using department text color */}
+                              <td className={`px-4 py-3 border-r border-slate-200 text-center font-black ${deptInfo.textColor || 'text-slate-700'}`}>
+                                {deptInfo.name}
                               </td>
                               
                               {/* Password (Editable inline) */}
@@ -394,64 +860,13 @@ export default function UserManagement({
                   </div>
                 </div>
 
-                {/* PRIVILEGES DEFINITION DIALOG */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
-                  <div className="border-b border-slate-100 pb-2">
-                    <h3 className="text-slate-800 font-black text-sm uppercase tracking-wide flex items-center gap-1.5">
-                      <Shield className="w-4 h-4 text-emerald-600" />
-                      ตารางข้อมูลสรุปลำดับขั้นสิทธิ์และหน้าที่ผู้ใช้ประจำวัน (User Level Duties Matrix)
-                    </h3>
-                  </div>
-
-                  <div className="overflow-hidden border border-slate-200 rounded-xl">
-                    <table className="w-full text-left border-collapse table-fixed text-xs font-sans">
-                      <thead>
-                        <tr className="bg-slate-50 text-slate-500 font-extrabold uppercase border-b border-slate-200">
-                          <th className="px-4 py-2.5 text-center font-black text-[10px] w-[15%] border-r border-slate-200">ระดับ</th>
-                          <th className="px-4 py-2.5 text-center font-black text-[10px] w-[25%] border-r border-slate-200">ชื่อระดับสิทธิ์</th>
-                          <th className="px-4 py-2.5 text-left font-black text-[10px] w-[60%]">หน้าที่รับผิดชอบขอบเขตระบบ</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200">
-                        {/* Row 1: Admin */}
-                        <tr className="bg-[#fff2cc]/20 hover:bg-[#fff2cc]/40 transition-colors">
-                          <td className="px-4 py-3.5 text-center font-black font-mono text-[#7f6000] border-r border-slate-200 bg-[#fff2cc]">1</td>
-                          <td className="px-4 py-3.5 text-center font-black text-[#7f6000] border-r border-slate-200 bg-[#fff2cc]">Admin</td>
-                          <td className="px-4 py-3.5 text-left font-extrabold text-slate-700">ดูแลระบบทั้งหมด จัดการ User ทุกคน</td>
-                        </tr>
-                        
-                        {/* Row 2: Manager */}
-                        <tr className="bg-[#cfe2f3]/20 hover:bg-[#cfe2f3]/40 transition-colors">
-                          <td className="px-4 py-3.5 text-center font-black font-mono text-[#0b5394] border-r border-slate-200 bg-[#cfe2f3]">2</td>
-                          <td className="px-4 py-3.5 text-center font-black text-[#0b5394] border-r border-slate-200 bg-[#cfe2f3]">Manager</td>
-                          <td className="px-4 py-3.5 text-left font-extrabold text-slate-700">อนุมัติสูตร, คำนวณสูตร, บันทึกยอด</td>
-                        </tr>
-
-                        {/* Row 3: Staff */}
-                        <tr className="bg-[#d9ead3]/20 hover:bg-[#d9ead3]/40 transition-colors">
-                          <td className="px-4 py-3.5 text-center font-black font-mono text-[#274e13] border-r border-slate-200 bg-[#d9ead3]">3</td>
-                          <td className="px-4 py-3.5 text-center font-black text-[#274e13] border-r border-slate-200 bg-[#d9ead3]">Staff</td>
-                          <td className="px-4 py-3.5 text-left font-extrabold text-slate-700">คำนวณสูตร, บันทึกยอด</td>
-                        </tr>
-
-                        {/* Row 4: Viewer */}
-                        <tr className="bg-[#fce5cd]/20 hover:bg-[#fce5cd]/40 transition-colors">
-                          <td className="px-4 py-3.5 text-center font-black font-mono text-[#783f04] border-r border-slate-200 bg-[#fce5cd]">4</td>
-                          <td className="px-4 py-3.5 text-center font-black text-[#783f04] border-r border-slate-200 bg-[#fce5cd]">Viewer</td>
-                          <td className="px-4 py-3.5 text-left font-extrabold text-slate-700">ดูรายงานอย่างเดียว แก้ไขไม่ได้</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
               </div>
 
             </div>
           ) : (
             /* DETAILED WORK SUMMARY SECTION FOR ADMIN (Rendered when activeAdminTab === 'data_summary') */
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 animate-fade-in">
-              <div className="border-b border-slate-100 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="border-b border-slate-100 pb-3 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
                 <div className="flex items-center gap-2.5">
                   <div className="p-2 bg-rose-50 rounded-xl text-rose-600 shrink-0">
                     <BarChart2 className="w-5 h-5 animate-pulse" />
@@ -466,87 +881,89 @@ export default function UserManagement({
                   </div>
                 </div>
 
-                {/* Sub Tab Switches */}
-                <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1 shrink-0 self-start md:self-auto text-xs">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSummaryTab('grouped');
-                      setSummarySearch('');
-                    }}
-                    className={`px-3 py-1.5 rounded-lg font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                      summaryTab === 'grouped' 
-                        ? 'bg-white text-rose-700 shadow-sm border border-slate-200/50' 
-                        : 'text-slate-500 hover:text-slate-900'
-                    }`}
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    <span>สรุปผลงานรายบุคคล</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSummaryTab('raw_logs');
-                      setSummarySearch('');
-                    }}
-                    className={`px-3 py-1.5 rounded-lg font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                      summaryTab === 'raw_logs' 
-                        ? 'bg-white text-rose-700 shadow-sm border border-slate-200/50' 
-                        : 'text-slate-500 hover:text-slate-900'
-                    }`}
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>รายการบันทึกดิบละเอียด ({(finalizedProducts || []).length})</span>
-                  </button>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 self-start xl:self-auto w-full xl:w-auto">
+                  {/* Sub Tab Switches */}
+                  <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1 text-xs shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSummaryTab('grouped');
+                        setFilterUsername('');
+                        setFilterProductCode('');
+                        setFilterProductName('');
+                        setFilterAddedBy('');
+                        setFilterDept('ALL');
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                        summaryTab === 'grouped' 
+                          ? 'bg-white text-rose-700 shadow-sm border border-slate-200/50' 
+                          : 'text-slate-500 hover:text-slate-900'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>สรุปผลงานรายบุคคล</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSummaryTab('raw_logs');
+                        setFilterUsername('');
+                        setFilterProductCode('');
+                        setFilterProductName('');
+                        setFilterAddedBy('');
+                        setFilterDept('ALL');
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                        summaryTab === 'raw_logs' 
+                          ? 'bg-white text-rose-700 shadow-sm border border-slate-200/50' 
+                          : 'text-slate-500 hover:text-slate-900'
+                      }`}
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>รายการบันทึกดิบละเอียด ({(finalizedProducts || []).length})</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* Controls (Search + Clear All Data Actions) */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs w-full max-w-md">
-                  <Search className="w-4 h-4 text-slate-400 shrink-0" />
-                  <input
-                    type="text"
-                    value={summarySearch}
-                    onChange={(e) => setSummarySearch(e.target.value)}
-                    placeholder={
-                      summaryTab === 'grouped'
-                        ? "ค้นหาชื่อผู้ใช้งาน..."
-                        : "ค้นหาผู้บันทึก, รหัสสินค้า, ชื่อสินค้า..."
-                    }
-                    className="bg-transparent border-none outline-none w-full font-bold text-slate-700"
-                  />
-                  {summarySearch && (
+              {/* Controls (Simulated Sandbox Testing & Reset Actions) */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-rose-50/50 border border-rose-100 p-4 rounded-2xl shadow-inner-sm animate-fade-in">
+                <div className="text-left w-full sm:w-auto">
+                  <span className="text-[11px] text-rose-500 font-black uppercase tracking-wider block">🧪 กล่องทดสอบระบบ (Testing Sandbox)</span>
+                  <span className="text-slate-500 text-xs font-bold leading-normal block mt-0.5">
+                    จำลองผลงานพรีเซลล์ของเจ้าหน้าที่ท่านอื่นสุ่มเพื่อทดสอบระบบการค้นหา กรอง และจัดแสดงรายงาน
+                  </span>
+                </div>
+                <div className="flex items-center gap-2.5 flex-wrap w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={handleLoadRandomMockData}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-700 hover:bg-rose-800 text-white font-black text-xs uppercase rounded-xl shadow-sm hover:shadow-md transition-all active:scale-95 cursor-pointer"
+                  >
+                    <span>⚡ สุ่มเพิ่มข้อมูลสินค้า (หลาย User)</span>
+                  </button>
+
+                  {finalizedProducts && finalizedProducts.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => setSummarySearch('')}
-                      className="text-slate-400 hover:text-slate-600 font-extrabold text-[10px]"
+                      onClick={() => {
+                        triggerConfirm(
+                          "ล้างข้อมูลพรีเซลล์ทั้งหมด",
+                          "คุณต้องการล้างข้อมูลบันทึกผลงานการคำนวณพรีเซลล์ของพนักงานทุกคนในระบบสำหรับวันนี้ใช่หรือไม่? (การล้างข้อมูลนี้จะลบสถิติและข้อมูลดิบทั้งหมดออกจากระบบส่วนกลางและไม่สามารถกู้คืนได้)",
+                          () => {
+                            onClearAllFinalizedProducts();
+                            setSuccessMsg("ล้างข้อมูลพรีเซลล์ของวันนี้เรียบร้อยแล้ว");
+                            setTimeout(() => setSuccessMsg(null), 3000);
+                          }
+                        );
+                      }}
+                      className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-extrabold text-xs uppercase rounded-xl transition-all active:scale-95 cursor-pointer"
                     >
-                      ล้าง
+                      <Trash2 className="w-3.5 h-3.5 text-slate-500" />
+                      <span>ล้างข้อมูล ({finalizedProducts.length})</span>
                     </button>
                   )}
                 </div>
-
-                {finalizedProducts && finalizedProducts.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      triggerConfirm(
-                        "ล้างข้อมูลพรีเซลล์ทั้งหมด",
-                        "คุณต้องการล้างข้อมูลบันทึกผลงานการคำนวณพรีเซลล์ของพนักงานทุกคนในระบบสำหรับวันนี้ใช่หรือไม่? (การล้างข้อมูลนี้จะลบสถิติและข้อมูลดิบทั้งหมดออกจากระบบส่วนกลางและไม่สามารถกู้คืนได้)",
-                        () => {
-                          onClearAllFinalizedProducts();
-                          setSuccessMsg("ล้างข้อมูลพรีเซลล์ของวันนี้เรียบร้อยแล้ว");
-                          setTimeout(() => setSuccessMsg(null), 3000);
-                        }
-                      );
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer shrink-0"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span>ล้างข้อมูลบันทึกของทุกคน ({finalizedProducts.length} รายการ)</span>
-                  </button>
-                )}
               </div>
 
               {/* Tab 1: Grouped Summary */}
@@ -586,60 +1003,492 @@ export default function UserManagement({
                   };
                 });
 
-                const filteredGroupedData = processedGroupedData.filter(item => 
-                  item.username.toLowerCase().includes(summarySearch.trim().toLowerCase())
-                );
+                const groupUserOptions = Array.from(new Set(processedGroupedData.map(item => item.username))).sort();
+                const groupUserCounts = processedGroupedData.reduce((acc, item) => {
+                  acc[item.username] = (acc[item.username] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>);
 
-                return (
-                  <div className="overflow-hidden border border-rose-100 rounded-2xl shadow-sm">
-                    <table className="w-full text-left border-collapse text-xs font-sans">
-                      <thead>
-                        <tr className="bg-rose-50/70 text-rose-800 border-b border-rose-100 font-bold">
-                          <th className="px-4 py-3 text-left font-black">👤 ผู้บันทึกงาน / สิทธิ์</th>
-                          <th className="px-4 py-3 text-center font-black">จำนวนรายการที่ทำ</th>
-                          <th className="px-4 py-3 text-right font-black">ลบสะสม (Multi)</th>
-                          <th className="px-4 py-3 text-right font-black">บวกสะสม (Plus)</th>
-                          <th className="px-4 py-3 text-right font-black">สุทธิรวม (ชิ้น)</th>
-                          <th className="px-4 py-3 text-right font-black">มูลค่ารวม (บาท)</th>
-                          <th className="px-4 py-3 text-center font-black">เวลาบันทึกล่าสุด</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 bg-white">
-                        {filteredGroupedData.length === 0 ? (
-                          <tr>
-                            <td colSpan={7} className="px-4 py-10 text-center text-slate-400 font-bold italic">
-                              ไม่พบประวัติผลงานการบันทึกข้อมูล
-                            </td>
+                const groupRoleOptions = Array.from(new Set(processedGroupedData.map(item => item.roleName))).sort();
+                const groupRoleCounts = processedGroupedData.reduce((acc, item) => {
+                  acc[item.roleName] = (acc[item.roleName] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>);
+
+                const groupDeptOptions = Array.from(new Set(processedGroupedData.map(item => getUserDeptInfo(item.username).name))).sort();
+                const groupDeptCounts = processedGroupedData.reduce((acc, item) => {
+                  const d = getUserDeptInfo(item.username).name;
+                  acc[d] = (acc[d] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>);
+
+                const groupRecordsOptions = Array.from(new Set(processedGroupedData.map(item => item.totalRecords))).sort((a,b) => a-b);
+                const groupRecordsCounts = processedGroupedData.reduce((acc, item) => {
+                  acc[item.totalRecords] = (acc[item.totalRecords] || 0) + 1;
+                  return acc;
+                }, {} as Record<number, number>);
+
+                const groupMultiOptions = Array.from(new Set(processedGroupedData.map(item => item.totalMulti))).sort((a,b) => a-b);
+                const groupMultiCounts = processedGroupedData.reduce((acc, item) => {
+                  acc[item.totalMulti] = (acc[item.totalMulti] || 0) + 1;
+                  return acc;
+                }, {} as Record<number, number>);
+
+                const groupPlusOptions = Array.from(new Set(processedGroupedData.map(item => item.totalPlus))).sort((a,b) => a-b);
+                const groupPlusCounts = processedGroupedData.reduce((acc, item) => {
+                  acc[item.totalPlus] = (acc[item.totalPlus] || 0) + 1;
+                  return acc;
+                }, {} as Record<number, number>);
+
+                const groupNetOptions = Array.from(new Set(processedGroupedData.map(item => item.totalNet))).sort((a,b) => a-b);
+                const groupNetCounts = processedGroupedData.reduce((acc, item) => {
+                  acc[item.totalNet] = (acc[item.totalNet] || 0) + 1;
+                  return acc;
+                }, {} as Record<number, number>);
+
+                const groupPriceOptions = Array.from(new Set(processedGroupedData.map(item => item.totalPrice))).sort((a,b) => a-b);
+                const groupPriceCounts = processedGroupedData.reduce((acc, item) => {
+                  acc[item.totalPrice] = (acc[item.totalPrice] || 0) + 1;
+                  return acc;
+                }, {} as Record<number, number>);
+
+                const groupTimeOptions = Array.from(new Set(processedGroupedData.map(item => item.latestTime || '-'))).sort();
+                const groupTimeCounts = processedGroupedData.reduce((acc, item) => {
+                  const t = item.latestTime || '-';
+                  acc[t] = (acc[t] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>);
+
+                 const filteredGroupedData = processedGroupedData.filter(item => {
+                   const deptInfo = getUserDeptInfo(item.username);
+                   
+                   // Multi-Select Filters
+                   if (groupSelUser.length > 0 && !groupSelUser.includes(item.username)) return false;
+                   if (groupSelRole.length > 0 && !groupSelRole.includes(item.roleName)) return false;
+                   if (groupSelDept.length > 0 && !groupSelDept.includes(deptInfo.name)) return false;
+                   if (groupSelRecords.length > 0 && !groupSelRecords.includes(item.totalRecords)) return false;
+                   if (groupSelMulti.length > 0 && !groupSelMulti.includes(item.totalMulti)) return false;
+                   if (groupSelPlus.length > 0 && !groupSelPlus.includes(item.totalPlus)) return false;
+                   if (groupSelNet.length > 0 && !groupSelNet.includes(item.totalNet)) return false;
+                   if (groupSelPrice.length > 0 && !groupSelPrice.includes(item.totalPrice)) return false;
+                   if (groupSelTime.length > 0 && !groupSelTime.includes(item.latestTime)) return false;
+
+                   // Column-specific fallback filters
+                   if (groupFilterUser.trim()) {
+                     const q = groupFilterUser.trim().toLowerCase();
+                     if (!(item.username || '').toLowerCase().includes(q)) return false;
+                   }
+                   if (groupFilterRole.trim()) {
+                     const q = groupFilterRole.trim().toLowerCase();
+                     if (!(item.roleName || '').toLowerCase().includes(q)) return false;
+                   }
+                   if (groupFilterDept.trim()) {
+                     const q = groupFilterDept.trim().toLowerCase();
+                     if (!(deptInfo.name || '').toLowerCase().includes(q)) return false;
+                   }
+                   if (groupFilterRecords.trim()) {
+                     const q = groupFilterRecords.trim().toLowerCase();
+                     if (!String(item.totalRecords).toLowerCase().includes(q)) return false;
+                   }
+                   if (groupFilterMulti.trim()) {
+                     const q = groupFilterMulti.trim().toLowerCase();
+                     const strVal = item.totalMulti !== 0 ? `-${item.totalMulti}` : '-';
+                     if (!strVal.toLowerCase().includes(q) && !String(item.totalMulti).toLowerCase().includes(q)) return false;
+                   }
+                   if (groupFilterPlus.trim()) {
+                     const q = groupFilterPlus.trim().toLowerCase();
+                     const strVal = item.totalPlus !== 0 ? `+${item.totalPlus}` : '-';
+                     if (!strVal.toLowerCase().includes(q) && !String(item.totalPlus).toLowerCase().includes(q)) return false;
+                   }
+                   if (groupFilterNet.trim()) {
+                     const q = groupFilterNet.trim().toLowerCase();
+                     const strVal = item.totalNet > 0 ? `+${item.totalNet}` : String(item.totalNet);
+                     if (!strVal.toLowerCase().includes(q) && !String(item.totalNet).toLowerCase().includes(q)) return false;
+                   }
+                   if (groupFilterPrice.trim()) {
+                     const q = groupFilterPrice.trim().toLowerCase();
+                     const strVal = item.totalPrice > 0 ? `+${item.totalPrice}` : String(item.totalPrice);
+                     if (!strVal.toLowerCase().includes(q) && !String(item.totalPrice).toLowerCase().includes(q)) return false;
+                   }
+                   if (groupFilterTime.trim()) {
+                     const q = groupFilterTime.trim().toLowerCase();
+                     if (!(item.latestTime || '').toLowerCase().includes(q)) return false;
+                   }
+
+                   // Original global search/filter
+                   if (filterUsername.trim()) {
+                     const uFilter = filterUsername.trim().toLowerCase();
+                     const username = (item.username || '').toLowerCase();
+                     const roleName = (item.roleName || '').toLowerCase();
+                     const deptName = (deptInfo.name || '').toLowerCase();
+                     const totalRecords = String(item.totalRecords);
+                     const totalMulti = item.totalMulti !== 0 ? `-${item.totalMulti}` : '-';
+                     const totalPlus = item.totalPlus !== 0 ? `+${item.totalPlus}` : '-';
+                     const totalNet = String(item.totalNet);
+                     const totalPrice = String(item.totalPrice);
+                     const latestTime = (item.latestTime || '').toLowerCase();
+
+                     const matches = (
+                       username.includes(uFilter) ||
+                       roleName.includes(uFilter) ||
+                       deptName.includes(uFilter) ||
+                       totalRecords.includes(uFilter) ||
+                       totalMulti.includes(uFilter) ||
+                       totalPlus.includes(uFilter) ||
+                       totalNet.includes(uFilter) ||
+                       totalPrice.includes(uFilter) ||
+                       latestTime.includes(uFilter)
+                     );
+                     if (!matches) return false;
+                   }
+
+                   if (filterDept !== 'ALL') {
+                     if (deptInfo.name !== filterDept) return false;
+                   }
+
+                   return true;
+                 });
+
+                const handleGroupedSort = (field: string) => {
+                  if (groupedSortField === field) {
+                    setGroupedSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+                  } else {
+                    setGroupedSortField(field);
+                    setGroupedSortDirection('asc');
+                  }
+                };
+
+                const sortedGroupedData = [...filteredGroupedData].sort((a, b) => {
+                  let valA: any;
+                  let valB: any;
+
+                  if (groupedSortField === 'dept') {
+                    valA = getUserDeptInfo(a.username).name;
+                    valB = getUserDeptInfo(b.username).name;
+                  } else {
+                    valA = a[groupedSortField as keyof typeof a];
+                    valB = b[groupedSortField as keyof typeof b];
+                  }
+
+                  if (valA === undefined || valA === null) valA = '';
+                  if (valB === undefined || valB === null) valB = '';
+
+                  if (typeof valA === 'string' && typeof valB === 'string') {
+                    return groupedSortDirection === 'asc' 
+                      ? valA.localeCompare(valB, 'th') 
+                      : valB.localeCompare(valA, 'th');
+                  }
+                  if (typeof valA === 'number' && typeof valB === 'number') {
+                    return groupedSortDirection === 'asc' ? valA - valB : valB - valA;
+                  }
+                  return 0;
+                });
+
+                 return (
+                   <div className="overflow-hidden border border-rose-100 rounded-2xl shadow-sm">
+                     <table className="w-full text-left border-collapse text-xs font-sans">
+                       <thead>
+                         <tr className="bg-rose-50/70 text-rose-800 border-b border-rose-100 font-bold select-none">
+                           <th 
+                             onClick={() => handleGroupedSort('username')}
+                             className="px-4 py-3 text-left font-black cursor-pointer hover:bg-rose-100/50 select-none group transition-colors"
+                           >
+                             <div className="flex items-center gap-1">
+                               <span>ผู้ใช้งาน (User)</span>
+                               <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                 groupedSortField === 'username' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                               }`} />
+                             </div>
+                           </th>
+                           <th 
+                             onClick={() => handleGroupedSort('roleName')}
+                             className="px-4 py-3 text-center font-black w-[15%] cursor-pointer hover:bg-rose-100/50 select-none group transition-colors"
+                           >
+                             <div className="flex items-center justify-center gap-1">
+                               <span>ระดับสิทธิ์</span>
+                               <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                 groupedSortField === 'roleName' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                               }`} />
+                             </div>
+                           </th>
+                           <th 
+                             onClick={() => handleGroupedSort('dept')}
+                             className="px-4 py-3 text-center font-black w-[15%] cursor-pointer hover:bg-rose-100/50 select-none group transition-colors"
+                           >
+                             <div className="flex items-center justify-center gap-1">
+                               <span>แผนก</span>
+                               <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                 groupedSortField === 'dept' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                               }`} />
+                             </div>
+                           </th>
+                           <th 
+                             onClick={() => handleGroupedSort('totalRecords')}
+                             className="px-4 py-3 text-center font-black cursor-pointer hover:bg-rose-100/50 select-none group transition-colors"
+                           >
+                             <div className="flex items-center justify-center gap-1">
+                               <span>จำนวนรายการที่ทำ</span>
+                               <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                 groupedSortField === 'totalRecords' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                               }`} />
+                             </div>
+                           </th>
+                           <th 
+                             onClick={() => handleGroupedSort('totalMulti')}
+                             className="px-4 py-3 text-right font-black cursor-pointer hover:bg-rose-100/50 select-none group transition-colors"
+                           >
+                             <div className="flex items-center justify-end gap-1">
+                               <span>ลบสะสม (Multi)</span>
+                               <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                 groupedSortField === 'totalMulti' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                               }`} />
+                             </div>
+                           </th>
+                           <th 
+                             onClick={() => handleGroupedSort('totalPlus')}
+                             className="px-4 py-3 text-right font-black cursor-pointer hover:bg-rose-100/50 select-none group transition-colors"
+                           >
+                             <div className="flex items-center justify-end gap-1">
+                               <span>บวกสะสม (Plus)</span>
+                               <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                 groupedSortField === 'totalPlus' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                               }`} />
+                             </div>
+                           </th>
+                           <th 
+                             onClick={() => handleGroupedSort('totalNet')}
+                             className="px-4 py-3 text-right font-black cursor-pointer hover:bg-rose-100/50 select-none group transition-colors"
+                           >
+                             <div className="flex items-center justify-end gap-1">
+                               <span>สุทธิรวม (ชิ้น)</span>
+                               <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                 groupedSortField === 'totalNet' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                               }`} />
+                             </div>
+                           </th>
+                           <th 
+                             onClick={() => handleGroupedSort('totalPrice')}
+                             className="px-4 py-3 text-right font-black cursor-pointer hover:bg-rose-100/50 select-none group transition-colors"
+                           >
+                             <div className="flex items-center justify-end gap-1">
+                               <span>มูลค่ารวม (บาท)</span>
+                               <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                 groupedSortField === 'totalPrice' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                               }`} />
+                             </div>
+                           </th>
+                           <th 
+                             onClick={() => handleGroupedSort('latestTime')}
+                             className="px-4 py-3 text-center font-black cursor-pointer hover:bg-rose-100/50 select-none group transition-colors"
+                           >
+                             <div className="flex items-center justify-center gap-1">
+                               <span>เวลาบันทึกล่าสุด</span>
+                               <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                 groupedSortField === 'latestTime' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                               }`} />
+                             </div>
+                           </th>
+                         </tr>
+                         {/* Column Filters Row */}
+                         <tr className="bg-slate-50/60 border-b border-rose-100/40">
+                            {/* 1. User */}
+                            <th className="px-2 py-2">
+                              <MultiSelectFilter
+                                title="ผู้ใช้งาน"
+                                options={groupUserOptions}
+                                selected={groupSelUser}
+                                onChange={setGroupSelUser}
+                                isOpen={openDropdownId === 'group_user'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'group_user' ? null : 'group_user')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={groupUserCounts}
+                                placeholder="ผู้ใช้งาน"
+                                dropdownWidth="w-56"
+                              />
+                            </th>
+                            {/* 2. Role */}
+                            <th className="px-2 py-2 w-[15%]">
+                              <MultiSelectFilter
+                                title="ระดับสิทธิ์"
+                                options={groupRoleOptions}
+                                selected={groupSelRole}
+                                onChange={setGroupSelRole}
+                                isOpen={openDropdownId === 'group_role'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'group_role' ? null : 'group_role')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={groupRoleCounts}
+                                placeholder="สิทธิ์"
+                                dropdownWidth="w-48"
+                              />
+                            </th>
+                            {/* 3. Dept */}
+                            <th className="px-2 py-2 w-[15%]">
+                              <MultiSelectFilter
+                                title="แผนก"
+                                options={groupDeptOptions}
+                                selected={groupSelDept}
+                                onChange={setGroupSelDept}
+                                isOpen={openDropdownId === 'group_dept'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'group_dept' ? null : 'group_dept')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={groupDeptCounts}
+                                placeholder="แผนก"
+                                dropdownWidth="w-48"
+                              />
+                            </th>
+                            {/* 4. Total Records */}
+                            <th className="px-2 py-2">
+                              <MultiSelectFilter
+                                title="จำนวนรายการ"
+                                options={groupRecordsOptions}
+                                selected={groupSelRecords}
+                                onChange={setGroupSelRecords}
+                                isOpen={openDropdownId === 'group_records'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'group_records' ? null : 'group_records')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={groupRecordsCounts}
+                                renderLabel={(val) => `${val.toLocaleString()} รายการ`}
+                                placeholder="จำนวน"
+                                dropdownWidth="w-48"
+                              />
+                            </th>
+                            {/* 5. Total Multi */}
+                            <th className="px-2 py-2">
+                              <MultiSelectFilter
+                                title="ลบสะสม"
+                                options={groupMultiOptions}
+                                selected={groupSelMulti}
+                                onChange={setGroupSelMulti}
+                                isOpen={openDropdownId === 'group_multi'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'group_multi' ? null : 'group_multi')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={groupMultiCounts}
+                                renderLabel={(val) => val !== 0 ? `-${val.toLocaleString()}` : '-'}
+                                placeholder="ลบสะสม"
+                                dropdownWidth="w-48"
+                              />
+                            </th>
+                            {/* 6. Total Plus */}
+                            <th className="px-2 py-2">
+                              <MultiSelectFilter
+                                title="บวกสะสม"
+                                options={groupPlusOptions}
+                                selected={groupSelPlus}
+                                onChange={setGroupSelPlus}
+                                isOpen={openDropdownId === 'group_plus'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'group_plus' ? null : 'group_plus')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={groupPlusCounts}
+                                renderLabel={(val) => val !== 0 ? `+${val.toLocaleString()}` : '-'}
+                                placeholder="บวกสะสม"
+                                dropdownWidth="w-48"
+                              />
+                            </th>
+                            {/* 7. Total Net */}
+                            <th className="px-2 py-2">
+                              <MultiSelectFilter
+                                title="สุทธิ"
+                                options={groupNetOptions}
+                                selected={groupSelNet}
+                                onChange={setGroupSelNet}
+                                isOpen={openDropdownId === 'group_net'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'group_net' ? null : 'group_net')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={groupNetCounts}
+                                renderLabel={(val) => val > 0 ? `+${val.toLocaleString()}` : val.toLocaleString()}
+                                placeholder="สุทธิ"
+                                dropdownWidth="w-48"
+                              />
+                            </th>
+                            {/* 8. Total Price */}
+                            <th className="px-2 py-2">
+                              <MultiSelectFilter
+                                title="มูลค่า"
+                                options={groupPriceOptions}
+                                selected={groupSelPrice}
+                                onChange={setGroupSelPrice}
+                                isOpen={openDropdownId === 'group_price'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'group_price' ? null : 'group_price')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={groupPriceCounts}
+                                renderLabel={(val) => `${val.toLocaleString()} ฿`}
+                                placeholder="มูลค่า"
+                                dropdownWidth="w-48"
+                              />
+                            </th>
+                            {/* 9. Latest Time */}
+                            <th className="px-2 py-2">
+                              <MultiSelectFilter
+                                title="เวลาล่าสุด"
+                                options={groupTimeOptions}
+                                selected={groupSelTime}
+                                onChange={setGroupSelTime}
+                                isOpen={openDropdownId === 'group_time'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'group_time' ? null : 'group_time')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={groupTimeCounts}
+                                placeholder="เวลา"
+                                dropdownWidth="w-56"
+                              />
+                            </th>
                           </tr>
-                        ) : (
-                          filteredGroupedData.map((item) => {
-                            const colors = getLevelColorClasses(item.level);
-                            return (
-                              <tr key={item.username} className="hover:bg-rose-50/10 transition-colors">
-                                <td className="px-4 py-3 align-middle font-black text-slate-850">
-                                  <div className="flex items-center gap-2">
-                                    <span>👤 {item.username}</span>
-                                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold font-mono uppercase ${colors.badge}`}>
-                                      {item.roleName}
-                                    </span>
-                                  </div>
-                                </td>
+                       </thead>
+                       <tbody className="divide-y divide-slate-100 bg-white">
+                         {sortedGroupedData.length === 0 ? (
+                           <tr>
+                             <td colSpan={9} className="px-4 py-10 text-center text-slate-400 font-bold italic">
+                               ไม่พบประวัติผลงานการบันทึกข้อมูล
+                             </td>
+                           </tr>
+                         ) : (
+                           sortedGroupedData.map((item) => {
+                             const colors = getLevelColorClasses(item.level);
+                             const deptInfo = getUserDeptInfo(item.username);
+                             return (
+                               <tr key={item.username} className={`${deptInfo.bgRow} border-b border-slate-100 transition-colors`}>
+                                 <td className="px-4 py-3 align-middle font-black text-slate-850">
+                                    <span className={deptInfo.textColor}>{item.username}</span>
+                                  </td>
+                                  <td className="px-4 py-3 align-middle text-center font-black text-slate-700">
+                                    {item.roleName}
+                                  </td>
+                                  <td className={`px-4 py-3 align-middle text-center font-black ${deptInfo.textColor || "text-slate-700"}`}>
+                                    {deptInfo.name}
+                                   </td>
                                 <td className="px-4 py-3 text-center font-bold font-mono text-slate-750">
-                                  {item.totalRecords.toLocaleString()} รายการ
+                                  <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md text-[11px]">
+                                    {item.totalRecords.toLocaleString()} รายการ
+                                  </span>
                                 </td>
-                                <td className="px-4 py-3 text-right font-bold font-mono text-rose-600">
-                                  {item.totalMulti !== 0 ? `-${item.totalMulti.toLocaleString()}` : '0'}
+                                <td className="px-4 py-3 text-right font-black font-mono text-rose-600">
+                                  {item.totalMulti !== 0 ? `-${item.totalMulti.toLocaleString()}` : '-'}
                                 </td>
-                                <td className="px-4 py-3 text-right font-bold font-mono text-emerald-600">
-                                  {item.totalPlus !== 0 ? `+${item.totalPlus.toLocaleString()}` : '0'}
+                                <td className="px-4 py-3 text-right font-black font-mono text-emerald-600">
+                                  {item.totalPlus !== 0 ? `+${item.totalPlus.toLocaleString()}` : '-'}
                                 </td>
-                                <td className={`px-4 py-3 text-right font-bold font-mono ${item.totalNet < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                  {item.totalNet > 0 ? `+${item.totalNet.toLocaleString()}` : item.totalNet.toLocaleString()}
+                                <td className="px-4 py-3 text-right align-middle">
+                                  <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-mono font-black ${
+                                    item.totalNet < 0 
+                                      ? 'bg-rose-50 text-rose-700 border border-rose-100' 
+                                      : item.totalNet > 0 
+                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
+                                        : 'bg-slate-50 text-slate-650 border border-slate-100'
+                                  }`}>
+                                    {item.totalNet > 0 ? `+${item.totalNet.toLocaleString()}` : item.totalNet.toLocaleString()}
+                                  </span>
                                 </td>
-                                <td className={`px-4 py-3 text-right font-bold font-mono ${item.totalPrice < 0 ? 'text-rose-600' : item.totalPrice > 0 ? 'text-emerald-600' : 'text-slate-550'}`}>
-                                  {item.totalPrice.toLocaleString()}
+                                <td className="px-4 py-3 text-right align-middle">
+                                  <span className={`inline-block px-2 py-0.5 rounded font-mono font-black ${
+                                    item.totalPrice < 0 
+                                      ? 'bg-rose-50 text-rose-700' 
+                                      : item.totalPrice > 0 
+                                        ? 'bg-emerald-50 text-emerald-700' 
+                                        : 'text-slate-550'
+                                  }`}>
+                                    {item.totalPrice.toLocaleString()}
+                                  </span>
                                 </td>
-                                <td className="px-4 py-3 text-center font-bold font-mono text-slate-500 text-[11px]">
+                                <td className="px-4 py-3 text-center font-bold font-mono text-slate-400 text-[11px]">
                                   {item.latestTime}
                                 </td>
                               </tr>
@@ -655,60 +1504,470 @@ export default function UserManagement({
               {/* Tab 2: Raw Logs */}
               {summaryTab === 'raw_logs' && (() => {
                 const rawLogsData = finalizedProducts || [];
+
+                const rawCodeOptions = Array.from(new Set(rawLogsData.map(log => log.code || ''))).sort();
+                const rawCodeCounts = rawLogsData.reduce((acc, log) => {
+                  const val = log.code || '';
+                  acc[val] = (acc[val] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>);
+
+                const rawNameOptions = Array.from(new Set(rawLogsData.map(log => log.name || ''))).sort();
+                const rawNameCounts = rawLogsData.reduce((acc, log) => {
+                  const val = log.name || '';
+                  acc[val] = (acc[val] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>);
+
+                const rawAddedByOptions = Array.from(new Set(rawLogsData.map(log => log.addedBy || ''))).sort();
+                const rawAddedByCounts = rawLogsData.reduce((acc, log) => {
+                  const val = log.addedBy || '';
+                  acc[val] = (acc[val] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>);
+
+                const rawDeptOptions = Array.from(new Set(rawLogsData.map(log => getUserDeptInfo(log.addedBy || '').name))).sort();
+                const rawDeptCounts = rawLogsData.reduce((acc, log) => {
+                  const val = getUserDeptInfo(log.addedBy || '').name;
+                  acc[val] = (acc[val] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>);
+
+                const rawTimeOptions = Array.from(new Set(rawLogsData.map(log => log.addedAt || ''))).sort();
+                const rawTimeCounts = rawLogsData.reduce((acc, log) => {
+                  const val = log.addedAt || '';
+                  acc[val] = (acc[val] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>);
+
+                const rawMultiOptions = Array.from(new Set(rawLogsData.map(log => log.multiQty || 0))).sort((a,b) => a-b);
+                const rawMultiCounts = rawLogsData.reduce((acc, log) => {
+                  const val = log.multiQty || 0;
+                  acc[val] = (acc[val] || 0) + 1;
+                  return acc;
+                }, {} as Record<number, number>);
+
+                const rawPlusOptions = Array.from(new Set(rawLogsData.map(log => log.plusQty || 0))).sort((a,b) => a-b);
+                const rawPlusCounts = rawLogsData.reduce((acc, log) => {
+                  const val = log.plusQty || 0;
+                  acc[val] = (acc[val] || 0) + 1;
+                  return acc;
+                }, {} as Record<number, number>);
+
+                const rawNetOptions = Array.from(new Set(rawLogsData.map(log => log.overrideQty || 0))).sort((a,b) => a-b);
+                const rawNetCounts = rawLogsData.reduce((acc, log) => {
+                  const val = log.overrideQty || 0;
+                  acc[val] = (acc[val] || 0) + 1;
+                  return acc;
+                }, {} as Record<number, number>);
+
+                const rawPriceOptions = Array.from(new Set(rawLogsData.map(log => log.price || 0))).sort((a,b) => a-b);
+                const rawPriceCounts = rawLogsData.reduce((acc, log) => {
+                  const val = log.price || 0;
+                  acc[val] = (acc[val] || 0) + 1;
+                  return acc;
+                }, {} as Record<number, number>);
+
                 const filteredRawLogs = rawLogsData.filter(log => {
-                  const q = summarySearch.trim().toLowerCase();
-                  if (!q) return true;
-                  return (
-                    (log.addedBy || '').toLowerCase().includes(q) ||
-                    (log.code || '').toLowerCase().includes(q) ||
-                    (log.name || '').toLowerCase().includes(q)
-                  );
+                  // Multi-Select Filters
+                  if (rawSelCode.length > 0 && !rawSelCode.includes(log.code || '')) return false;
+                  if (rawSelName.length > 0 && !rawSelName.includes(log.name || '')) return false;
+                  if (rawSelAddedBy.length > 0 && !rawSelAddedBy.includes(log.addedBy || '')) return false;
+                  
+                  const deptInfo = getUserDeptInfo(log.addedBy || '');
+                  if (rawSelDept.length > 0 && !rawSelDept.includes(deptInfo.name)) return false;
+                  if (rawSelTime.length > 0 && !rawSelTime.includes(log.addedAt || '')) return false;
+                  if (rawSelMulti.length > 0 && !rawSelMulti.includes(log.multiQty || 0)) return false;
+                  if (rawSelPlus.length > 0 && !rawSelPlus.includes(log.plusQty || 0)) return false;
+                  if (rawSelNet.length > 0 && !rawSelNet.includes(log.overrideQty || 0)) return false;
+                  if (rawSelPrice.length > 0 && !rawSelPrice.includes(log.price || 0)) return false;
+
+                  if (filterProductCode.trim()) {
+                    const codeFilter = filterProductCode.trim().toLowerCase();
+                    if (!(log.code || '').toLowerCase().includes(codeFilter)) return false;
+                  }
+
+                  if (filterProductName.trim()) {
+                    const nameFilter = filterProductName.trim().toLowerCase();
+                    if (!(log.name || '').toLowerCase().includes(nameFilter)) return false;
+                  }
+
+                  if (filterAddedBy.trim()) {
+                    const addedByFilter = filterAddedBy.trim().toLowerCase();
+                    if (!(log.addedBy || '').toLowerCase().includes(addedByFilter)) return false;
+                  }
+
+                  if (filterRawDept.trim()) {
+                    const deptFilter = filterRawDept.trim().toLowerCase();
+                    if (!(deptInfo.name || '').toLowerCase().includes(deptFilter)) return false;
+                  }
+
+                  if (filterRawTime.trim()) {
+                    const timeFilter = filterRawTime.trim().toLowerCase();
+                    if (!(log.addedAt || '').toLowerCase().includes(timeFilter)) return false;
+                  }
+
+                  if (filterDept !== 'ALL') {
+                    const deptInfo = getUserDeptInfo(log.addedBy || '');
+                    if (deptInfo.name !== filterDept) return false;
+                  }
+
+                  return true;
+                });
+
+                const handleRawSort = (field: string) => {
+                  if (rawSortField === field) {
+                    setRawSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+                  } else {
+                    setRawSortField(field);
+                    setRawSortDirection('asc');
+                  }
+                };
+
+                const sortedRawLogs = [...filteredRawLogs].sort((a, b) => {
+                  let valA: any;
+                  let valB: any;
+
+                  if (rawSortField === 'dept') {
+                    valA = getUserDeptInfo(a.addedBy || '').name;
+                    valB = getUserDeptInfo(b.addedBy || '').name;
+                  } else {
+                    valA = a[rawSortField as keyof typeof a];
+                    valB = b[rawSortField as keyof typeof b];
+                  }
+
+                  if (rawSortField === 'addedBy') {
+                    valA = valA || '';
+                    valB = valB || '';
+                  } else if (rawSortField === 'addedAt') {
+                    valA = valA || '';
+                    valB = valB || '';
+                  }
+
+                  if (valA === undefined || valA === null) valA = '';
+                  if (valB === undefined || valB === null) valB = '';
+
+                  if (typeof valA === 'string' && typeof valB === 'string') {
+                    return rawSortDirection === 'asc' 
+                      ? valA.localeCompare(valB, 'th') 
+                      : valB.localeCompare(valA, 'th');
+                  }
+                  if (typeof valA === 'number' && typeof valB === 'number') {
+                    return rawSortDirection === 'asc' ? valA - valB : valB - valA;
+                  }
+                  return 0;
                 });
 
                 return (
                   <div className="overflow-hidden border border-rose-100 rounded-2xl shadow-sm">
-                    <div className="max-h-[450px] overflow-y-auto no-scrollbar">
+                    <div className="max-h-[750px] overflow-y-auto no-scrollbar">
                       <table className="w-full text-left border-collapse text-xs font-sans">
                         <thead>
-                          <tr className="bg-rose-50/70 text-rose-800 border-b border-rose-100 font-bold sticky top-0 z-10">
-                            <th className="px-4 py-3 text-left font-black">สินค้า (Product Code/Name)</th>
-                            <th className="px-4 py-3 text-center font-black">👤 ผู้บันทึก / เวลา</th>
-                            <th className="px-4 py-3 text-right font-black">ลบ (Multi)</th>
-                            <th className="px-4 py-3 text-right font-black">บวก (Plus)</th>
-                            <th className="px-4 py-3 text-right font-black">สุทธิ(ชิ้น)</th>
-                            <th className="px-4 py-3 text-right font-black">บาท</th>
-                            <th className="px-4 py-3 text-center font-black">จัดการ</th>
+                                                    <tr className="bg-rose-50 text-rose-800 border-b border-rose-100 font-bold sticky top-0 z-20 select-none">
+                            <th 
+                              onClick={() => handleRawSort('code')}
+                              className="px-4 py-3 text-left font-black w-[12%] cursor-pointer hover:bg-rose-100/50 group transition-colors sticky top-0 bg-rose-50 z-20"
+                            >
+                              <div className="flex items-center gap-1">
+                                <span>รหัสสินค้า (Code)</span>
+                                <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                  rawSortField === 'code' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                                }`} />
+                              </div>
+                            </th>
+                            <th 
+                              onClick={() => handleRawSort('name')}
+                              className="px-4 py-3 text-left font-black w-[20%] cursor-pointer hover:bg-rose-100/50 group transition-colors sticky top-0 bg-rose-50 z-20"
+                            >
+                              <div className="flex items-center gap-1">
+                                <span>ชื่อสินค้า (Product Name)</span>
+                                <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                  rawSortField === 'name' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                                }`} />
+                              </div>
+                            </th>
+                            <th 
+                              onClick={() => handleRawSort('addedBy')}
+                              className="px-4 py-3 text-center font-black w-[12%] cursor-pointer hover:bg-rose-100/50 group transition-colors sticky top-0 bg-rose-50 z-20"
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                <span>ผู้บันทึก</span>
+                                <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                  rawSortField === 'addedBy' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                                }`} />
+                              </div>
+                            </th>
+                            <th 
+                              onClick={() => handleRawSort('dept')}
+                              className="px-4 py-3 text-center font-black w-[10%] cursor-pointer hover:bg-rose-100/50 group transition-colors sticky top-0 bg-rose-50 z-20"
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                <span>แผนก</span>
+                                <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                  rawSortField === 'dept' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                                }`} />
+                              </div>
+                            </th>
+                            <th 
+                              onClick={() => handleRawSort('addedAt')}
+                              className="px-4 py-3 text-center font-black w-[15%] cursor-pointer hover:bg-rose-100/50 group transition-colors sticky top-0 bg-rose-50 z-20"
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                <span>เวลาบันทึก</span>
+                                <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                  rawSortField === 'addedAt' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                                }`} />
+                              </div>
+                            </th>
+                            <th 
+                              onClick={() => handleRawSort('multiQty')}
+                              className="px-4 py-3 text-right font-black w-[8%] cursor-pointer hover:bg-rose-100/50 group transition-colors sticky top-0 bg-rose-50 z-20"
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                <span>ลบ (Multi)</span>
+                                <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                  rawSortField === 'multiQty' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                                }`} />
+                              </div>
+                            </th>
+                            <th 
+                              onClick={() => handleRawSort('plusQty')}
+                              className="px-4 py-3 text-right font-black w-[8%] cursor-pointer hover:bg-rose-100/50 group transition-colors sticky top-0 bg-rose-50 z-20"
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                <span>บวก (Plus)</span>
+                                <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                  rawSortField === 'plusQty' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                                }`} />
+                              </div>
+                            </th>
+                            <th 
+                              onClick={() => handleRawSort('overrideQty')}
+                              className="px-4 py-3 text-right font-black w-[8%] cursor-pointer hover:bg-rose-100/50 group transition-colors sticky top-0 bg-rose-50 z-20"
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                <span>สุทธิ (ชิ้น)</span>
+                                <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                  rawSortField === 'overrideQty' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                                }`} />
+                              </div>
+                            </th>
+                            <th 
+                              onClick={() => handleRawSort('price')}
+                              className="px-4 py-3 text-right font-black w-[10%] cursor-pointer hover:bg-rose-100/50 group transition-colors sticky top-0 bg-rose-50 z-20"
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                <span>มูลค่า (บาท)</span>
+                                <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                                  rawSortField === 'price' ? 'text-[#ba191a] opacity-100' : 'text-slate-400 opacity-40 group-hover:opacity-100'
+                                }`} />
+                              </div>
+                            </th>
+                            <th className="px-4 py-3 text-center font-black w-[5%] select-none sticky top-0 bg-rose-50 z-20">จัดการ</th>
+                          </tr>
+                          {/* Column Filter Row */}
+                          <tr className="bg-slate-50 border-b border-rose-100/40 sticky top-[38px] z-20 shadow-sm">
+                            {/* Filter Code */}
+                            <th className="px-2 py-2 align-middle sticky top-[38px] bg-slate-50 z-20 shadow-sm">
+                              <MultiSelectFilter
+                                title="รหัสสินค้า"
+                                options={rawCodeOptions}
+                                selected={rawSelCode}
+                                onChange={setRawSelCode}
+                                isOpen={openDropdownId === 'raw_code'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'raw_code' ? null : 'raw_code')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={rawCodeCounts}
+                                placeholder="รหัส"
+                                dropdownWidth="w-56"
+                              />
+                            </th>
+                            {/* Filter Name */}
+                            <th className="px-2 py-2 align-middle sticky top-[38px] bg-slate-50 z-20 shadow-sm">
+                              <MultiSelectFilter
+                                title="ชื่อสินค้า"
+                                options={rawNameOptions}
+                                selected={rawSelName}
+                                onChange={setRawSelName}
+                                isOpen={openDropdownId === 'raw_name'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'raw_name' ? null : 'raw_name')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={rawNameCounts}
+                                placeholder="ชื่อสินค้า"
+                                dropdownWidth="w-64"
+                              />
+                            </th>
+                            {/* Filter AddedBy */}
+                            <th className="px-2 py-2 align-middle sticky top-[38px] bg-slate-50 z-20 shadow-sm">
+                              <MultiSelectFilter
+                                title="ผู้บันทึก"
+                                options={rawAddedByOptions}
+                                selected={rawSelAddedBy}
+                                onChange={setRawSelAddedBy}
+                                isOpen={openDropdownId === 'raw_added_by'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'raw_added_by' ? null : 'raw_added_by')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={rawAddedByCounts}
+                                placeholder="ผู้บันทึก"
+                                dropdownWidth="w-56"
+                              />
+                            </th>
+                            {/* Filter RawDept */}
+                            <th className="px-2 py-2 align-middle sticky top-[38px] bg-slate-50 z-20 shadow-sm">
+                              <MultiSelectFilter
+                                title="แผนก"
+                                options={rawDeptOptions}
+                                selected={rawSelDept}
+                                onChange={setRawSelDept}
+                                isOpen={openDropdownId === 'raw_dept'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'raw_dept' ? null : 'raw_dept')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={rawDeptCounts}
+                                placeholder="แผนก"
+                                dropdownWidth="w-48"
+                              />
+                            </th>
+                            {/* Filter RawTime */}
+                            <th className="px-2 py-2 align-middle sticky top-[38px] bg-slate-50 z-20 shadow-sm">
+                              <MultiSelectFilter
+                                title="เวลาบันทึก"
+                                options={rawTimeOptions}
+                                selected={rawSelTime}
+                                onChange={setRawSelTime}
+                                isOpen={openDropdownId === 'raw_time'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'raw_time' ? null : 'raw_time')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={rawTimeCounts}
+                                placeholder="เวลา"
+                                dropdownWidth="w-56"
+                              />
+                            </th>
+                            {/* Filter Multi */}
+                            <th className="px-2 py-2 align-middle sticky top-[38px] bg-slate-50 z-20 shadow-sm">
+                              <MultiSelectFilter
+                                title="ลบ"
+                                options={rawMultiOptions}
+                                selected={rawSelMulti}
+                                onChange={setRawSelMulti}
+                                isOpen={openDropdownId === 'raw_multi'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'raw_multi' ? null : 'raw_multi')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={rawMultiCounts}
+                                renderLabel={(val) => val !== 0 ? `-${val.toLocaleString()}` : '-'}
+                                placeholder="ลบ"
+                                dropdownWidth="w-48"
+                              />
+                            </th>
+                            {/* Filter Plus */}
+                            <th className="px-2 py-2 align-middle sticky top-[38px] bg-slate-50 z-20 shadow-sm">
+                              <MultiSelectFilter
+                                title="บวก"
+                                options={rawPlusOptions}
+                                selected={rawSelPlus}
+                                onChange={setRawSelPlus}
+                                isOpen={openDropdownId === 'raw_plus'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'raw_plus' ? null : 'raw_plus')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={rawPlusCounts}
+                                renderLabel={(val) => val !== 0 ? `+${val.toLocaleString()}` : '-'}
+                                placeholder="บวก"
+                                dropdownWidth="w-48"
+                              />
+                            </th>
+                            {/* Filter Net */}
+                            <th className="px-2 py-2 align-middle sticky top-[38px] bg-slate-50 z-20 shadow-sm">
+                              <MultiSelectFilter
+                                title="สุทธิ"
+                                options={rawNetOptions}
+                                selected={rawSelNet}
+                                onChange={setRawSelNet}
+                                isOpen={openDropdownId === 'raw_net'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'raw_net' ? null : 'raw_net')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={rawNetCounts}
+                                renderLabel={(val) => val > 0 ? `+${val.toLocaleString()}` : val.toLocaleString()}
+                                placeholder="สุทธิ"
+                                dropdownWidth="w-48"
+                              />
+                            </th>
+                            {/* Filter Price */}
+                            <th className="px-2 py-2 align-middle sticky top-[38px] bg-slate-50 z-20 shadow-sm">
+                              <MultiSelectFilter
+                                title="มูลค่า"
+                                options={rawPriceOptions}
+                                selected={rawSelPrice}
+                                onChange={setRawSelPrice}
+                                isOpen={openDropdownId === 'raw_price'}
+                                onToggle={() => setOpenDropdownId(openDropdownId === 'raw_price' ? null : 'raw_price')}
+                                onClose={() => setOpenDropdownId(null)}
+                                optionCounts={rawPriceCounts}
+                                renderLabel={(val) => `${val.toLocaleString()} ฿`}
+                                placeholder="มูลค่า"
+                                dropdownWidth="w-48"
+                              />
+                            </th>
+                            {/* Actions Header Empty Space for alignment */}
+                            <th className="px-2 py-2 align-middle sticky top-[38px] bg-slate-50 z-20 shadow-sm">
+                              <div className="h-6 w-full bg-transparent"></div>
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
-                          {filteredRawLogs.length === 0 ? (
+                          {sortedRawLogs.length === 0 ? (
                             <tr>
-                              <td colSpan={7} className="px-4 py-10 text-center text-slate-400 font-bold italic">
+                              <td colSpan={10} className="px-4 py-10 text-center text-slate-400 font-bold italic">
                                 ไม่พบประวัติผลงานการบันทึกข้อมูลรายสินค้า
                               </td>
                             </tr>
                           ) : (
-                            filteredRawLogs.map((r, rIdx) => (
-                              <tr key={r.id || rIdx} className="hover:bg-rose-50/10 transition-colors">
-                                <td className="px-4 py-3 align-middle">
-                                  <div className="font-bold text-slate-900 font-mono text-[11px]">{r.code}</div>
-                                  <div className="font-extrabold text-slate-600 text-[11px] truncate max-w-xs">{r.name}</div>
+                            sortedRawLogs.map((r, rIdx) => {
+                              const deptInfo = getUserDeptInfo(r.addedBy || '');
+                              return (
+                                <tr key={r.id || rIdx} className={`${deptInfo.bgRow} transition-colors`}>
+                                <td className="px-4 py-3 align-middle font-mono text-[11px]">
+                                  <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded font-black border border-slate-200">
+                                    {r.code}
+                                  </span>
                                 </td>
-                                <td className="px-4 py-3 align-middle text-center">
-                                  <div className="font-black text-slate-850">👤 {r.addedBy || 'ไม่ระบุชื่อ'}</div>
-                                  <div className="text-[10px] text-slate-500 font-mono font-bold">{r.addedAt}</div>
+                                <td className="px-4 py-3 align-middle text-slate-800 font-black text-[11.5px] truncate max-w-[200px]" title={r.name}>
+                                  {r.name}
                                 </td>
-                                <td className="px-4 py-3 text-right text-rose-600 font-bold font-mono align-middle">
-                                  {r.multiQty !== 0 ? `-${r.multiQty.toLocaleString()}` : '0'}
+                                <td className="px-4 py-3 align-middle text-center font-black text-[11px] select-none">
+                                  <span className={deptInfo.textColor}>{r.addedBy || 'ไม่ระบุชื่อ'}</span>
                                 </td>
-                                <td className="px-4 py-3 text-right text-emerald-600 font-bold font-mono align-middle">
-                                  {r.plusQty !== 0 ? `+${r.plusQty.toLocaleString()}` : '0'}
+                                <td className="px-4 py-3 align-middle text-center font-black text-[11px] select-none">
+                                  <span className="text-[11px] text-slate-500 font-medium">{deptInfo.name}</span>
                                 </td>
-                                <td className={`px-4 py-3 text-right font-bold font-mono align-middle ${r.overrideQty < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                  {r.overrideQty > 0 ? `+${r.overrideQty.toLocaleString()}` : r.overrideQty.toLocaleString()}
+                                <td className="px-4 py-3 align-middle text-center font-mono text-[10px] font-bold text-slate-450">
+                                  {r.addedAt}
                                 </td>
-                                <td className={`px-4 py-3 text-right font-bold font-mono align-middle ${r.price < 0 ? 'text-rose-600' : r.price > 0 ? 'text-emerald-600' : 'text-slate-550'}`}>
-                                  {r.price.toLocaleString()}
+                                <td className="px-4 py-3 text-right text-rose-600 font-black font-mono align-middle">
+                                  {r.multiQty !== 0 ? `-${r.multiQty.toLocaleString()}` : '-'}
+                                </td>
+                                <td className="px-4 py-3 text-right text-emerald-600 font-black font-mono align-middle">
+                                  {r.plusQty !== 0 ? `+${r.plusQty.toLocaleString()}` : '-'}
+                                </td>
+                                <td className="px-4 py-3 text-right align-middle">
+                                  <span className={`inline-block px-2.5 py-1 rounded-lg text-[11px] font-mono font-black ${
+                                    r.overrideQty < 0 
+                                      ? 'bg-rose-50 text-rose-700 border border-rose-100' 
+                                      : r.overrideQty > 0 
+                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
+                                        : 'bg-slate-50 text-slate-650 border border-slate-100'
+                                  }`}>
+                                    {r.overrideQty > 0 ? `+${r.overrideQty.toLocaleString()}` : r.overrideQty.toLocaleString()}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-right align-middle">
+                                  <span className={`inline-block px-2 py-0.5 rounded font-mono font-black ${
+                                    r.price < 0 
+                                      ? 'bg-rose-50 text-rose-700' 
+                                      : r.price > 0 
+                                        ? 'bg-emerald-50 text-emerald-700' 
+                                        : 'text-slate-550'
+                                  }`}>
+                                    {r.price.toLocaleString()}
+                                  </span>
                                 </td>
                                 <td className="px-4 py-3 text-center align-middle">
                                   <button
@@ -727,14 +1986,15 @@ export default function UserManagement({
                                         );
                                       }
                                     }}
-                                    className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded transition-colors"
+                                    className="p-1.5 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
                                     title="ลบบันทึกรายการนี้"
                                   >
                                     <Trash2 className="w-3.5 h-3.5 mx-auto" />
                                   </button>
                                 </td>
                               </tr>
-                            ))
+                            );
+                           })
                           )}
                         </tbody>
                       </table>

@@ -686,37 +686,37 @@ export default function App() {
         <div className="flex items-center gap-6">
           {/* Authentic Farmhouse Brand Logo matching specification */}
           <FarmhouseLogo />
-
-          {/* Tab Navigation for Admin (Level 1) */}
-          {currentUser?.level === 1 && (
-            <div className="hidden md:flex bg-[#a01516] p-1 rounded-xl border border-red-500/30 gap-1.5 ml-2">
-              <button
-                type="button"
-                onClick={() => setActiveTab('presale')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                  activeTab === 'presale' 
-                    ? 'bg-white text-[#ba191a] shadow-sm' 
-                    : 'text-white hover:bg-white/10'
-                }`}
-              >
-                <Database className="w-3.5 h-3.5" />
-                <span>คำนวณสูตรพรีเซลล์</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('users')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                  activeTab === 'users' 
-                    ? 'bg-white text-[#ba191a] shadow-sm' 
-                    : 'text-white hover:bg-white/10'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>จัดการผู้ใช้ & สรุปงาน ({users.length})</span>
-              </button>
-            </div>
-          )}
         </div>
+
+        {/* Tab Navigation for Admin (Level 1) - Centered */}
+        {currentUser?.level === 1 && (
+          <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex bg-[#a01516] p-1 rounded-xl border border-red-500/30 gap-1.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab('presale')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'presale' 
+                  ? 'bg-white text-[#ba191a] shadow-sm' 
+                  : 'text-white hover:bg-white/10'
+              }`}
+            >
+              <Database className="w-3.5 h-3.5" />
+              <span>คำนวณสูตรพรีเซลล์</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('users')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'users' 
+                  ? 'bg-white text-[#ba191a] shadow-sm' 
+                  : 'text-white hover:bg-white/10'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>จัดการผู้ใช้ & สรุปงาน</span>
+            </button>
+          </div>
+        )}
 
         {/* User profile with dropdown logout function */}
         <div className="flex items-center gap-3">
@@ -725,7 +725,6 @@ export default function App() {
               <span className="text-xs font-black text-white font-sans tracking-wide uppercase">
                 {currentUser?.username || 'admin'}
               </span>
-              {/* Role/Level badge removed per user request */}
             </div>
             <button
               onClick={() => {
@@ -784,6 +783,10 @@ export default function App() {
               onDeleteFinalizedProduct={handleDeleteFinalizedProduct}
               onClearAllFinalizedProducts={handleClearAllFinalizedProducts}
               triggerConfirm={triggerConfirm}
+              onLoadDemoProducts={(demoProducts) => {
+                setFinalizedProducts(demoProducts);
+                localStorage.setItem('farmhouse_presale_finalized_products', JSON.stringify(demoProducts));
+              }}
             />
           </div>
         ) : (
@@ -942,6 +945,7 @@ export default function App() {
                 onSavePresale={handleSavePresale}
                 onImportBaseProducts={handleImportBaseProducts}
                 onResetAllData={handleResetEntireBoard}
+                users={users}
                 readOnly={currentUser?.level === 4 || (finalizedProducts !== null && currentUser?.level !== 1 && currentUser?.level !== 2 && currentUser?.level !== 3)}
               />
 
@@ -970,6 +974,7 @@ export default function App() {
                   onApproveFormula={handleApproveFormula}
                   currentUser={currentUser}
                   triggerConfirm={triggerConfirm}
+                  users={users}
                   onLoadDemoProducts={(demoProducts) => {
                     setFinalizedProducts(demoProducts);
                     localStorage.setItem('farmhouse_presale_finalized_products', JSON.stringify(demoProducts));

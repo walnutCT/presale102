@@ -60,5 +60,6 @@ export interface User {
   level: number;
   roleName: 'Admin' | 'Manager' | 'Staff' | 'Viewer';
   description: string;
+  department?: string;
 }
 

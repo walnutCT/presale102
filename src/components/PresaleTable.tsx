@@ -18,6 +18,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { Product } from '../types';
+import MultiSelectFilter from './MultiSelectFilter';
 
 interface PresaleTableProps {
   products: Product[];
@@ -28,6 +29,7 @@ interface PresaleTableProps {
   onSavePresale: () => void;
   onImportBaseProducts: (imported: Partial<Product>[]) => void;
   onResetAllData: () => void;
+  users?: any[];
   readOnly?: boolean;
 }
 
@@ -40,12 +42,142 @@ export default function PresaleTable({
   onSavePresale,
   onImportBaseProducts,
   onResetAllData,
+  users = [],
   readOnly = false
 }: PresaleTableProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<keyof Product | null>('code');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [notification, setNotification] = useState<string | null>(null);
+
+  // Multi-select column filters states
+  const [selectedCodes, setSelectedCodes] = useState<(string | number)[]>([]);
+  const [selectedNames, setSelectedNames] = useState<(string | number)[]>([]);
+  const [selectedMultis, setSelectedMultis] = useState<(string | number)[]>([]);
+  const [selectedPluses, setSelectedPluses] = useState<(string | number)[]>([]);
+  const [selectedOverrides, setSelectedOverrides] = useState<(string | number)[]>([]);
+  const [selectedPrices, setSelectedPrices] = useState<(string | number)[]>([]);
+  const [selectedDelDates, setSelectedDelDates] = useState<(string | number)[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<(string | number)[]>([]);
+  const [selectedTimes, setSelectedTimes] = useState<(string | number)[]>([]);
+
+  // State for active dropdown popover ID
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
+  // Clear all filters handler
+  const handleClearAllFilters = () => {
+    setSelectedCodes([]);
+    setSelectedNames([]);
+    setSelectedMultis([]);
+    setSelectedPluses([]);
+    setSelectedOverrides([]);
+    setSelectedPrices([]);
+    setSelectedDelDates([]);
+    setSelectedUsers([]);
+    setSelectedTimes([]);
+  };
+
+  const anyFilterActive = 
+    selectedCodes.length > 0 ||
+    selectedNames.length > 0 ||
+    selectedMultis.length > 0 ||
+    selectedPluses.length > 0 ||
+    selectedOverrides.length > 0 ||
+    selectedPrices.length > 0 ||
+    selectedDelDates.length > 0 ||
+    selectedUsers.length > 0 ||
+    selectedTimes.length > 0;
+
+  // Dynamic filter options based on full list (products)
+  const codeOptions = Array.from(new Set(products.map(p => p.code || ''))).filter(Boolean).sort();
+  const nameOptions = Array.from(new Set(products.map(p => p.name || ''))).filter(Boolean).sort();
+  const multiOptions = Array.from(new Set(products.map(p => p.multiQty))).sort((a, b) => a - b);
+  const plusOptions = Array.from(new Set(products.map(p => p.plusQty))).sort((a, b) => a - b);
+  const overrideOptions = Array.from(new Set(products.map(p => p.overrideQty))).sort((a, b) => a - b);
+  const priceOptions = Array.from(new Set(products.map(p => p.price))).sort((a, b) => a - b);
+  const delDateOptions = Array.from(new Set(products.map(p => p.delDate || ''))).filter(Boolean).sort();
+  const userOptions = Array.from(new Set(products.map(p => p.addedBy || 'ระบบ'))).sort();
+  const timeOptions = Array.from(new Set(products.map(p => p.addedAt || `${p.delDate} 08:30`))).sort();
+
+  // Dynamic counts for each option based on full list (products)
+  const codeCounts = products.reduce((acc, p) => {
+    const val = p.code || '';
+    acc[val] = (acc[val] || 0) + 1;
+    return acc;
+  }, {} as Record<string | number, number>);
+
+  const nameCounts = products.reduce((acc, p) => {
+    const val = p.name || '';
+    acc[val] = (acc[val] || 0) + 1;
+    return acc;
+  }, {} as Record<string | number, number>);
+
+  const multiCounts = products.reduce((acc, p) => {
+    const val = p.multiQty;
+    acc[val] = (acc[val] || 0) + 1;
+    return acc;
+  }, {} as Record<string | number, number>);
+
+  const plusCounts = products.reduce((acc, p) => {
+    const val = p.plusQty;
+    acc[val] = (acc[val] || 0) + 1;
+    return acc;
+  }, {} as Record<string | number, number>);
+
+  const overrideCounts = products.reduce((acc, p) => {
+    const val = p.overrideQty;
+    acc[val] = (acc[val] || 0) + 1;
+    return acc;
+  }, {} as Record<string | number, number>);
+
+  const priceCounts = products.reduce((acc, p) => {
+    const val = p.price;
+    acc[val] = (acc[val] || 0) + 1;
+    return acc;
+  }, {} as Record<string | number, number>);
+
+  const delDateCounts = products.reduce((acc, p) => {
+    const val = p.delDate || '';
+    acc[val] = (acc[val] || 0) + 1;
+    return acc;
+  }, {} as Record<string | number, number>);
+
+  const userCounts = products.reduce((acc, p) => {
+    const val = p.addedBy || 'ระบบ';
+    acc[val] = (acc[val] || 0) + 1;
+    return acc;
+  }, {} as Record<string | number, number>);
+
+  const timeCounts = products.reduce((acc, p) => {
+    const val = p.addedAt || `${p.delDate} 08:30`;
+    acc[val] = (acc[val] || 0) + 1;
+    return acc;
+  }, {} as Record<string | number, number>);
+
+  const getUserDeptInfo = (username: string) => {
+    const userObj = users?.find(u => u.username.toLowerCase() === username.toLowerCase());
+    const deptName = userObj?.department || '';
+
+    if (deptName) {
+      const uDept = deptName.toUpperCase();
+      if (uDept === 'IT') return { name: 'IT', textColor: 'text-blue-600' };
+      if (uDept === 'SALE') return { name: 'SALE', textColor: 'text-amber-600' };
+      if (uDept === 'MARKETING') return { name: 'MARKETING', textColor: 'text-purple-600' };
+      if (uDept === 'อื่นๆ' || uDept === 'OTHER' || uDept === 'OTHERS') return { name: 'อื่นๆ', textColor: 'text-emerald-600' };
+    }
+
+    const lower = username.toLowerCase();
+    if (lower === 'admin' || lower.includes('admin')) {
+      return { name: 'IT', textColor: 'text-blue-600' };
+    }
+    if (lower.startsWith('s') || lower.includes('สมเกียรติ') || lower.includes('staff 1') || lower.includes('staff 2') || lower.includes('รสริน')) {
+      return { name: 'SALE', textColor: 'text-amber-600' };
+    }
+    if (lower.startsWith('m') || lower.includes('วิจิตร') || lower.includes('manager')) {
+      return { name: 'MARKETING', textColor: 'text-purple-600' };
+    }
+    return { name: 'อื่นๆ', textColor: 'text-emerald-600' };
+  };
 
   // Sorting handler
   const handleSort = (field: keyof Product) => {
@@ -57,13 +189,55 @@ export default function PresaleTable({
     }
   };
 
-  // Filter products based on search term
+  // Filter products based on search term and multi-select filters
   const sortedAndFiltered = [...products]
-    .filter(p => 
-      p.code.includes(searchQuery) || 
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.category.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    .filter(p => {
+      // 1. Text Search Query
+      const q = searchQuery.toLowerCase().trim();
+      if (q) {
+        const code = (p.code || '').toLowerCase();
+        const name = (p.name || '').toLowerCase();
+        const category = (p.category || '').toLowerCase();
+        const multiQty = p.multiQty !== undefined ? String(p.multiQty) : '';
+        const plusQty = p.plusQty !== undefined ? String(p.plusQty) : '';
+        const overrideQty = p.overrideQty !== undefined ? String(p.overrideQty) : '';
+        const price = p.price !== undefined ? String(p.price) : '';
+        const delDate = (p.delDate || '').toLowerCase();
+        const addedBy = (p.addedBy || '').toLowerCase();
+        const addedAt = (p.addedAt || '').toLowerCase();
+        
+        const matchesQuery = (
+          code.includes(q) ||
+          name.includes(q) ||
+          category.includes(q) ||
+          multiQty.includes(q) ||
+          plusQty.includes(q) ||
+          overrideQty.includes(q) ||
+          price.includes(q) ||
+          delDate.includes(q) ||
+          addedBy.includes(q) ||
+          addedAt.includes(q)
+        );
+        if (!matchesQuery) return false;
+      }
+
+      // 2. Multi-select column filters
+      if (selectedCodes.length > 0 && !selectedCodes.includes(p.code || '')) return false;
+      if (selectedNames.length > 0 && !selectedNames.includes(p.name || '')) return false;
+      if (selectedMultis.length > 0 && !selectedMultis.includes(p.multiQty)) return false;
+      if (selectedPluses.length > 0 && !selectedPluses.includes(p.plusQty)) return false;
+      if (selectedOverrides.length > 0 && !selectedOverrides.includes(p.overrideQty)) return false;
+      if (selectedPrices.length > 0 && !selectedPrices.includes(p.price)) return false;
+      if (selectedDelDates.length > 0 && !selectedDelDates.includes(p.delDate || '')) return false;
+      
+      const pUser = p.addedBy || 'ระบบ';
+      if (selectedUsers.length > 0 && !selectedUsers.includes(pUser)) return false;
+
+      const pTime = p.addedAt || `${p.delDate} 08:30`;
+      if (selectedTimes.length > 0 && !selectedTimes.includes(pTime)) return false;
+
+      return true;
+    })
     .sort((a, b) => {
       if (!sortField) return 0;
       let valA = a[sortField];
@@ -150,7 +324,7 @@ export default function PresaleTable({
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
-              placeholder="ค้นหาตามรหัส/ชื่อสินค้า..."
+              placeholder="ค้นหาข้อมูลในตาราง (ค้นหาได้ทุกช่อง)..."
               className="w-full pl-9 pr-3 py-1.8 bg-white border border-slate-200 rounded focus:border-red-500 focus:outline-[#ba191a]/10 text-xs focus:ring-1 focus:ring-red-500"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
@@ -229,8 +403,8 @@ export default function PresaleTable({
       <div className="overflow-x-auto max-h-[500px] overflow-y-auto no-scrollbar">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50/75 select-none text-[11px] font-bold text-slate-500 uppercase tracking-wider sticky top-0 bg-slate-50 z-10">
-              <th className="p-3.5 w-10 text-center">
+            <tr className="border-b border-slate-200 bg-slate-50 select-none text-[11px] font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-20">
+              <th className="p-3.5 w-10 text-center sticky top-0 bg-slate-50 z-20">
                 <input
                   type="checkbox"
                   disabled={readOnly}
@@ -243,102 +417,256 @@ export default function PresaleTable({
               </th>
               <th 
                 onClick={() => handleSort('code')}
-                className="p-3.5 whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                className="p-3.5 whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none sticky top-0 bg-slate-50 z-20"
               >
                 <div className="flex items-center gap-1">
                   <span>ITEM CODE</span>
-                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                  <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
                     sortField === 'code' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
                   }`} />
                 </div>
               </th>
               <th 
                 onClick={() => handleSort('name')}
-                className="p-3.5 whitespace-nowrap w-2/5 cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                className="p-3.5 whitespace-nowrap w-2/5 cursor-pointer hover:bg-slate-100 transition-colors group select-none sticky top-0 bg-slate-50 z-20"
               >
                 <div className="flex items-center gap-1">
                   <span>ITEM NAME</span>
-                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                  <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
                     sortField === 'name' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
                   }`} />
                 </div>
               </th>
               <th 
                 onClick={() => handleSort('multiQty')}
-                className="p-3.5 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                className="p-3.5 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none sticky top-0 bg-slate-50 z-20"
               >
                 <div className="flex items-center justify-end gap-1">
                   <span>MULTI_QTY</span>
-                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                  <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
                     sortField === 'multiQty' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
                   }`} />
                 </div>
               </th>
               <th 
                 onClick={() => handleSort('plusQty')}
-                className="p-3.5 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                className="p-3.5 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none sticky top-0 bg-slate-50 z-20"
               >
                 <div className="flex items-center justify-end gap-1">
                   <span>PLUS_QTY</span>
-                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                  <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
                     sortField === 'plusQty' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
                   }`} />
                 </div>
               </th>
               <th 
                 onClick={() => handleSort('overrideQty')}
-                className="p-3.5 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                className="p-3.5 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none sticky top-0 bg-slate-50 z-20"
               >
                 <div className="flex items-center justify-end gap-1">
                   <span>OVERRIDE_QTY</span>
-                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                  <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
                     sortField === 'overrideQty' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
                   }`} />
                 </div>
               </th>
               <th 
                 onClick={() => handleSort('price')}
-                className="p-3.5 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                className="p-3.5 text-right whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none sticky top-0 bg-slate-50 z-20"
               >
                 <div className="flex items-center justify-end gap-1">
                   <span>PRICE_AMT (THB)</span>
-                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                  <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
                     sortField === 'price' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
                   }`} />
                 </div>
               </th>
               <th 
-                onClick={() => handleSort('delDate')}
-                className="p-3.5 text-center whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
-              >
-                <div className="flex items-center justify-center gap-1">
-                  <span>DEL_DATE</span>
-                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
-                    sortField === 'delDate' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
-                  }`} />
-                </div>
-              </th>
-              <th 
                 onClick={() => handleSort('addedBy')}
-                className="p-3.5 text-center whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                className="p-3.5 text-center whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none sticky top-0 bg-slate-50 z-20"
               >
                 <div className="flex items-center justify-center gap-1">
                   <span>USER</span>
-                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                  <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
                     sortField === 'addedBy' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
                   }`} />
                 </div>
               </th>
               <th 
+                onClick={() => handleSort('delDate')}
+                className="p-3.5 text-center whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none sticky top-0 bg-slate-50 z-20"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <span>DEL_DATE</span>
+                  <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
+                    sortField === 'delDate' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
+                  }`} />
+                </div>
+              </th>
+              <th 
                 onClick={() => handleSort('addedAt')}
-                className="p-3.5 text-center whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                className="p-3.5 text-center whitespace-nowrap cursor-pointer hover:bg-slate-100 transition-colors group select-none sticky top-0 bg-slate-50 z-20"
               >
                 <div className="flex items-center justify-center gap-1">
                   <span>TIME</span>
-                  <ArrowUpDown className={`w-3 h-3 transition-opacity ${
+                  <ArrowUpDown className={`w-4 h-4 shrink-0 transition-opacity ${
                     sortField === 'addedAt' ? 'text-[#ba191a] opacity-100' : 'text-slate-300 opacity-40 group-hover:opacity-100'
                   }`} />
                 </div>
+              </th>
+            </tr>
+            {/* Column Filters Row */}
+            <tr className="bg-slate-50 border-b border-slate-200 sticky top-[44px] z-20 shadow-sm">
+              <th className="px-2 py-1.5 align-middle text-center sticky top-[44px] bg-slate-50 z-20 shadow-sm">
+                {anyFilterActive && (
+                  <button
+                    type="button"
+                    onClick={handleClearAllFilters}
+                    className="p-1 px-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-extrabold text-[10px] rounded border border-red-200 transition-colors cursor-pointer select-none active:scale-95 flex items-center justify-center mx-auto"
+                    title="ล้างการกรองทั้งหมด"
+                  >
+                    ล้าง
+                  </button>
+                )}
+              </th>
+              {/* 1. Item Code */}
+              <th className="px-2 py-1.5 align-middle sticky top-[44px] bg-slate-50 z-20 shadow-sm">
+                <MultiSelectFilter
+                  title="รหัส"
+                  options={codeOptions}
+                  selected={selectedCodes}
+                  onChange={setSelectedCodes}
+                  isOpen={openDropdownId === 'presale_code'}
+                  onToggle={() => setOpenDropdownId(openDropdownId === 'presale_code' ? null : 'presale_code')}
+                  onClose={() => setOpenDropdownId(null)}
+                  optionCounts={codeCounts}
+                  placeholder="รหัส"
+                  dropdownWidth="w-56"
+                />
+              </th>
+              {/* 2. Item Name */}
+              <th className="px-2 py-1.5 align-middle sticky top-[44px] bg-slate-50 z-20 shadow-sm">
+                <MultiSelectFilter
+                  title="สินค้า"
+                  options={nameOptions}
+                  selected={selectedNames}
+                  onChange={setSelectedNames}
+                  isOpen={openDropdownId === 'presale_name'}
+                  onToggle={() => setOpenDropdownId(openDropdownId === 'presale_name' ? null : 'presale_name')}
+                  onClose={() => setOpenDropdownId(null)}
+                  optionCounts={nameCounts}
+                  placeholder="ชื่อสินค้า"
+                  dropdownWidth="w-64"
+                />
+              </th>
+              {/* 3. Multi Qty */}
+              <th className="px-2 py-1.5 align-middle sticky top-[44px] bg-slate-50 z-20 shadow-sm">
+                <MultiSelectFilter
+                  title="ลบ"
+                  options={multiOptions}
+                  selected={selectedMultis}
+                  onChange={setSelectedMultis}
+                  isOpen={openDropdownId === 'presale_multi'}
+                  onToggle={() => setOpenDropdownId(openDropdownId === 'presale_multi' ? null : 'presale_multi')}
+                  onClose={() => setOpenDropdownId(null)}
+                  optionCounts={multiCounts}
+                  renderLabel={(val) => val !== 0 ? `-${val.toLocaleString()}` : '0'}
+                  placeholder="ลบ"
+                  dropdownWidth="w-44"
+                />
+              </th>
+              {/* 4. Plus Qty */}
+              <th className="px-2 py-1.5 align-middle sticky top-[44px] bg-slate-50 z-20 shadow-sm">
+                <MultiSelectFilter
+                  title="บวก"
+                  options={plusOptions}
+                  selected={selectedPluses}
+                  onChange={setSelectedPluses}
+                  isOpen={openDropdownId === 'presale_plus'}
+                  onToggle={() => setOpenDropdownId(openDropdownId === 'presale_plus' ? null : 'presale_plus')}
+                  onClose={() => setOpenDropdownId(null)}
+                  optionCounts={plusCounts}
+                  renderLabel={(val) => val !== 0 ? `+${val.toLocaleString()}` : '0'}
+                  placeholder="บวก"
+                  dropdownWidth="w-44"
+                />
+              </th>
+              {/* 5. Override Qty */}
+              <th className="px-2 py-1.5 align-middle sticky top-[44px] bg-slate-50 z-20 shadow-sm">
+                <MultiSelectFilter
+                  title="สุทธิ"
+                  options={overrideOptions}
+                  selected={selectedOverrides}
+                  onChange={setSelectedOverrides}
+                  isOpen={openDropdownId === 'presale_override'}
+                  onToggle={() => setOpenDropdownId(openDropdownId === 'presale_override' ? null : 'presale_override')}
+                  onClose={() => setOpenDropdownId(null)}
+                  optionCounts={overrideCounts}
+                  renderLabel={(val) => val > 0 ? `+${val.toLocaleString()}` : val.toLocaleString()}
+                  placeholder="สุทธิ"
+                  dropdownWidth="w-44"
+                />
+              </th>
+              {/* 6. Price */}
+              <th className="px-2 py-1.5 align-middle sticky top-[44px] bg-slate-50 z-20 shadow-sm">
+                <MultiSelectFilter
+                  title="มูลค่า"
+                  options={priceOptions}
+                  selected={selectedPrices}
+                  onChange={setSelectedPrices}
+                  isOpen={openDropdownId === 'presale_price'}
+                  onToggle={() => setOpenDropdownId(openDropdownId === 'presale_price' ? null : 'presale_price')}
+                  onClose={() => setOpenDropdownId(null)}
+                  optionCounts={priceCounts}
+                  renderLabel={(val) => `${val.toLocaleString()} ฿`}
+                  placeholder="มูลค่า"
+                  dropdownWidth="w-44"
+                />
+              </th>
+              {/* 7. User */}
+              <th className="px-2 py-1.5 align-middle sticky top-[44px] bg-slate-50 z-20 shadow-sm">
+                <MultiSelectFilter
+                  title="ผู้ใช้"
+                  options={userOptions}
+                  selected={selectedUsers}
+                  onChange={setSelectedUsers}
+                  isOpen={openDropdownId === 'presale_user'}
+                  onToggle={() => setOpenDropdownId(openDropdownId === 'presale_user' ? null : 'presale_user')}
+                  onClose={() => setOpenDropdownId(null)}
+                  optionCounts={userCounts}
+                  placeholder="ผู้ใช้"
+                  dropdownWidth="w-56"
+                />
+              </th>
+              {/* 8. Del Date */}
+              <th className="px-2 py-1.5 align-middle sticky top-[44px] bg-slate-50 z-20 shadow-sm">
+                <MultiSelectFilter
+                  title="วันที่"
+                  options={delDateOptions}
+                  selected={selectedDelDates}
+                  onChange={setSelectedDelDates}
+                  isOpen={openDropdownId === 'presale_del_date'}
+                  onToggle={() => setOpenDropdownId(openDropdownId === 'presale_del_date' ? null : 'presale_del_date')}
+                  onClose={() => setOpenDropdownId(null)}
+                  optionCounts={delDateCounts}
+                  placeholder="วันที่"
+                  dropdownWidth="w-56"
+                />
+              </th>
+              {/* 9. Time */}
+              <th className="px-2 py-1.5 align-middle sticky top-[44px] bg-slate-50 z-20 shadow-sm">
+                <MultiSelectFilter
+                  title="เวลา"
+                  options={timeOptions}
+                  selected={selectedTimes}
+                  onChange={setSelectedTimes}
+                  isOpen={openDropdownId === 'presale_time'}
+                  onToggle={() => setOpenDropdownId(openDropdownId === 'presale_time' ? null : 'presale_time')}
+                  onClose={() => setOpenDropdownId(null)}
+                  optionCounts={timeCounts}
+                  placeholder="เวลา"
+                  dropdownWidth="w-56"
+                />
               </th>
             </tr>
           </thead>
@@ -417,16 +745,23 @@ export default function PresaleTable({
                       }`}>
                         {p.price.toLocaleString()}
                       </td>
-                      <td className="p-3 text-center font-mono text-[11px] text-slate-400 whitespace-nowrap">{p.delDate}</td>
                       <td className="p-3 text-center whitespace-nowrap">
                         {p.addedBy ? (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                            {p.addedBy}
-                          </span>
+                          <div className="flex flex-col items-center gap-0.5 select-none">
+                            {p.addedBy.split(', ').map((user, uIdx) => {
+                              const dept = getUserDeptInfo(user);
+                              return (
+                                <span key={uIdx} className={`text-xs font-black ${dept.textColor}`}>
+                                  {user}
+                                </span>
+                              );
+                            })}
+                          </div>
                         ) : (
                           <span className="text-slate-400 font-bold">-</span>
                         )}
                       </td>
+                      <td className="p-3 text-center font-mono text-[11px] text-slate-400 whitespace-nowrap">{p.delDate}</td>
                       <td className="p-3 text-center font-mono text-[11px] text-slate-500 whitespace-nowrap">
                         {getTimeOnly(p.addedAt)}
                       </td>
