@@ -24,7 +24,7 @@ import MultiSelectFilter from './MultiSelectFilter';
 interface PresaleTableProps {
   products: Product[];
   onToggleProduct: (id: string) => void;
-  onToggleAllProducts: (checked: boolean) => void;
+  onToggleAllProducts: (checked: boolean, ids?: string[]) => void;
   onDeleteSelected: () => void;
   onUpdatePlusQtyDirectly: (id: string, newQty: number) => void;
   onSavePresale: () => void;
@@ -400,21 +400,6 @@ export default function PresaleTable({
             />
           </div>
 
-          {/* Reset All Data button */}
-          <button
-            disabled={readOnly}
-            onClick={onResetAllData}
-            className={`px-3 py-1.8 border text-xs font-bold flex items-center gap-1.5 transition-all ${
-              readOnly 
-                ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed shadow-none'
-                : 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-800 rounded active:scale-[0.98] cursor-pointer'
-            }`}
-            title="รีเซ็ตข้อมูลสินค้าเพื่อดึงตารางกลับคืนมา"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
-            <span>Reset</span>
-          </button>
-
           {/* Delete Selection button */}
           <button
             onClick={onDeleteSelected}
@@ -481,7 +466,7 @@ export default function PresaleTable({
                     readOnly ? 'cursor-not-allowed opacity-50' : 'focus:ring-red-500 cursor-pointer'
                   }`}
                   checked={isAllChecked}
-                  onChange={e => onToggleAllProducts(e.target.checked)}
+                  onChange={e => onToggleAllProducts(e.target.checked, sortedAndFiltered.map(p => p.id))}
                 />
               </th>
               <th 
@@ -746,13 +731,6 @@ export default function PresaleTable({
                   <div className="flex flex-col items-center justify-center gap-2">
                     <AlertCircle className="w-8 h-8 text-slate-300" />
                     <span>ไม่พบสินค้าที่ตรงตามเงื่อนไขการกรองของคุณ</span>
-                    <button
-                       onClick={onResetAllData}
-                      className="mt-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded shadow hover:shadow-md transition-all cursor-pointer flex items-center gap-1.5"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>รีเซ็ตข้อมูลสินค้าเพื่อดึงตารางกลับคืนมา</span>
-                    </button>
                   </div>
                 </td>
               </tr>

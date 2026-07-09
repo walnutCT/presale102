@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'react';
 import { FormulaType, Product, StoreFilterState } from '../types';
 import * as XLSX from 'xlsx';
+import { Calendar, Sliders } from 'lucide-react';
 
 interface ValidationError {
   row: number;
@@ -73,6 +74,7 @@ export default function RecipeConfigPanel({
 
   const [startDate, setStartDate] = useState<string>(allowedDates[0]);
   const [endDate, setEndDate] = useState<string>(allowedDates[0]);
+  const [leftSelectedDate, setLeftSelectedDate] = useState<string>(allowedDates[0]);
   const [mainValue, setMainValue] = useState<number>(20);
   const [genComparison, setGenComparison] = useState<string>('<=');
   const [genValue, setGenValue] = useState<number>(0);
@@ -103,14 +105,29 @@ export default function RecipeConfigPanel({
   // Flush calculated quantities back to parent component's master state
   const handleSaveToSystem = () => {
     // Exclude demo code from update if parent doesn't hold it, or map correctly
-    const finalCalculated = previewProducts.filter(p => p.id !== 'demo-240g');
-    onSaveBatch(finalCalculated);
+    // And save only the products generated for the currently selected viewing date on the Left Card!
+    const filteredForViewingDate = previewProducts.filter(p => p.delDate === leftSelectedDate && p.id !== 'demo-240g');
+    onSaveBatch(filteredForViewingDate);
     
-    triggerToast('✓ บันทึกสูตรปรับปรุงไปยังตารางสรุปผลลัพธ์หลักด้านล่างเรียบร้อยแล้ว!');
+    triggerToast(`✓ บันทึกสูตรปรับปรุงของวันที่ ${leftSelectedDate} ไปยังตารางสรุปผลลัพธ์หลักด้านล่างเรียบร้อยแล้ว!`);
   };
 
   // Filter preview items to show only the 3 important items matching mockup screenshots
   const demoItemsToShow = previewProducts.filter(p => TARGET_DEMO_CODES.includes(p.code));
+
+  // Filter out any date that doesn't have active orders/simulated products
+  const calculatedDates = allowedDates.filter(d => 
+    previewProducts.some(p => p.delDate === d && (p.plusQty > 0 || p.multiQty > 0))
+  ).length > 0 
+    ? allowedDates.filter(d => previewProducts.some(p => p.delDate === d && (p.plusQty > 0 || p.multiQty > 0)))
+    : allowedDates.filter(d => previewProducts.some(p => p.delDate === d));
+
+  // Auto-select first available calculated date when calculatedDates list changes
+  useEffect(() => {
+    if (calculatedDates.length > 0 && !calculatedDates.includes(leftSelectedDate)) {
+      setLeftSelectedDate(calculatedDates[0]);
+    }
+  }, [calculatedDates, leftSelectedDate]);
 
   // File reader for CSV and Excel with robust validation of data types, capacities and formats
   const processUploadedFile = (file: File) => {
@@ -329,40 +346,47 @@ export default function RecipeConfigPanel({
 
   // Perform calculation specifically for Upload File modes
   const handleCalculateUpload = () => {
-    // If no records are uploaded, we simulate with mockup values
-    const recordsToUse = uploadedCsvRecords.length > 0 ? uploadedCsvRecords : [
-      { code: '8850123110108', qty: 137 },
-      { code: '8850123110115', qty: 112 },
-      { code: '8850123110146', qty: 72 },
-    ];
+    const selectedList = products.filter(p => p.category === 'เดลี่แซนวิช');
+    if (selectedList.length === 0) {
+      triggerToast('⚠️ ไม่พบสินค้าในหมวดเดลี่แซนวิช!');
+      return;
+    }
 
-    setPreviewProducts((prevList) => {
-      return prevList.map((p) => {
+    // If no records are uploaded, we simulate with mockup values or random
+    const recordsToUse = uploadedCsvRecords.length > 0 ? uploadedCsvRecords : selectedList.map(p => ({
+      code: p.code,
+      qty: Math.floor(Math.random() * 80) + 40
+    }));
+
+    const allSimulated: Product[] = [];
+
+    allowedDates.forEach((date) => {
+      const simulatedForDate = selectedList.map((p) => {
         // Find matching record from upload file
         const match = recordsToUse.find((r) => r.code === p.code || p.code.includes(r.code) || r.code.includes(p.code));
-        if (!match) return p; // if not in file, keep original
+        let uploadedQty = match ? match.qty : Math.floor(Math.random() * 80) + 40;
 
         let nextPlusQty = p.plusQty;
 
         switch (uploadSubFormula) {
           case 'replace':
           case 'replace_fixl':
-            nextPlusQty = match.qty;
+            nextPlusQty = uploadedQty;
             break;
           case 'add_pieces':
-            nextPlusQty = (p.plusQty || p.multiQty) + match.qty;
+            nextPlusQty = p.multiQty + uploadedQty;
             break;
           case 'add_percent':
-            nextPlusQty = Math.round((p.plusQty || p.multiQty) * (1 + match.qty / 100));
+            nextPlusQty = Math.round(p.multiQty * (1 + uploadedQty / 100));
             break;
           case 'reduce_pieces':
-            nextPlusQty = Math.max(0, (p.plusQty || p.multiQty) - match.qty);
+            nextPlusQty = Math.max(0, p.multiQty - uploadedQty);
             break;
           case 'reduce_percent':
-            nextPlusQty = Math.max(0, Math.round((p.plusQty || p.multiQty) * (1 - match.qty / 100)));
+            nextPlusQty = Math.max(0, Math.round(p.multiQty * (1 - uploadedQty / 100)));
             break;
           default:
-            nextPlusQty = match.qty;
+            nextPlusQty = uploadedQty;
             break;
         }
 
@@ -374,73 +398,24 @@ export default function RecipeConfigPanel({
           plusQty: nextPlusQty,
           overrideQty,
           price,
-          selected: true, // Auto select to map onto active summaries!
-          delDate: startDate,
+          selected: true,
+          delDate: date,
         };
       });
+
+      allSimulated.push(...simulatedForDate);
     });
 
+    setPreviewProducts(allSimulated);
     setHasCalculated(true);
-    triggerToast(`คำนวณสำเร็จ! จัดทำตารางจำลอง (Preview List) จากทางเลือก "${
-      uploadSubFormula === 'replace' ? 'ทับยอดตามไฟล์' :
-      uploadSubFormula === 'replace_fixl' ? 'ทับยอดตามไฟล์ Fixl' :
-      uploadSubFormula === 'add_pieces' ? 'เพิ่มยอดตามไฟล์ (ชิ้น)' :
-      uploadSubFormula === 'add_percent' ? 'เพิ่มยอดตามไฟล์ (%)' :
-      uploadSubFormula === 'reduce_pieces' ? 'ลดยอดตามไฟล์ (ชิ้น)' : 'ลดยอดตามไฟล์ (%)'
-    }" เรียบร้อยแล้ว!`);
+    triggerToast(`✓ คำนวณอัพโหลดสำเร็จ! จัดทำตารางจำลอง (Preview List) เรียบร้อยแล้ว`);
   };
 
-  // Synchronize internal state with parent products list on mount or formula change
+  // Reset hasCalculated and preview list on formula change
   useEffect(() => {
-    // Generate or fetch key items
-    const baseList = [...products];
-    // Ensure 8850123110115 is present for illustration if missing from initial data
-    const has240g = baseList.some(p => p.code === '8850123110115');
-    if (!has240g) {
-      baseList.push({
-        id: 'demo-240g',
-        code: '8850123110115',
-        name: 'แซนวิช240ก',
-        category: 'เดลี่แซนวิช',
-        multiQty: 112, // matching mockup
-        plusQty: 0,
-        overrideQty: -112,
-        price: -2352,
-        unitPrice: 21,
-        delDate: '22/03/2026',
-        selected: true,
-      });
-    }
-
-    // Adapt demo values to screenshot's baseline to look exactly identical:
-    // แซนวิช480ก (8850123110108) -> multiQty: 137, plusQty: 0, overrideQty: -137, price: -5480, unitPrice: 40
-    const adapted = baseList.map(p => {
-      if (p.code === '8850123110108') {
-        return {
-          ...p,
-          multiQty: 137,
-          plusQty: p.plusQty === 0 ? 0 : p.plusQty,
-          overrideQty: p.plusQty > 0 ? (p.plusQty - 137) : -137,
-          price: p.plusQty > 0 ? (p.plusQty - 137) * 40 : -5480,
-          selected: true
-        };
-      }
-      if (p.code === '8850123110146') {
-        return {
-          ...p,
-          multiQty: 72,
-          plusQty: p.plusQty === 0 ? 0 : p.plusQty,
-          overrideQty: p.plusQty > 0 ? (p.plusQty - 72) : -72,
-          price: p.plusQty > 0 ? (p.plusQty - 72) * 30 : -2160,
-          selected: true
-        };
-      }
-      return p;
-    });
-
-    setPreviewProducts(adapted);
     setHasCalculated(false);
-  }, [products, selectedFormula]);
+    setPreviewProducts([]);
+  }, [selectedFormula]);
 
   // Handle formula change initial values
   useEffect(() => {
@@ -532,73 +507,114 @@ export default function RecipeConfigPanel({
           <div className="flex-1 lg:max-w-[42%] flex flex-col justify-between bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div className="space-y-4">
               
-              {/* Date Selector Dropdown aligned exactly on top */}
-              <div className="relative">
-                <select 
-                  className="w-full bg-white border border-slate-350 px-4 py-2 text-slate-800 font-extrabold text-[13px] rounded-lg appearance-none focus:outline-none cursor-pointer pr-10 shadow-sm"
-                  value={startDate}
-                  onChange={(e) => {
-                    setStartDate(e.target.value);
-                    setEndDate(e.target.value);
-                  }}
-                >
-                  {allowedDates.map(d => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-800 font-black">
-                  <svg className="fill-current h-4.5 w-4.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                    <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                  </svg>
-                </div>
+              {/* Header and indicator */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <span className="text-xs font-extrabold text-[#ba191a] uppercase tracking-wide flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
+                  ตารางจำลองผลการคำนวณ (Preview List)
+                </span>
+                {hasCalculated ? (
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-black animate-pulse">
+                    คำนวณแล้ว
+                  </span>
+                ) : (
+                  <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">
+                    รอกดคำนวณ
+                  </span>
+                )}
               </div>
 
-              {/* Shaded Pink table wrapper */}
-              <div className="bg-[#ffebeb] rounded-xl border border-red-200 p-0 text-xs overflow-hidden font-sans">
-                <table className="w-full text-left border-collapse table-fixed">
-                  <thead>
-                    <tr className="bg-[#ffd6d6] text-slate-800 font-black">
-                      <th className="px-3 py-2.5 text-[11px] font-black uppercase text-center border-r border-[#ffc2c2] w-[35%]">ITEM CODE</th>
-                      <th className="px-3 py-2.5 text-[11px] font-black uppercase text-center border-r border-[#ffc2c2] w-[35%]">ITEM NAME</th>
-                      <th className="px-2 py-2.5 text-[11px] font-black uppercase text-center border-r border-[#ffc2c2] w-[18%]">BATH</th>
-                      <th className="px-2 py-2.5 text-[11px] font-black uppercase text-center w-[12%]">PCS</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#ffc7c7] text-[#2c2c2c]">
-                    {demoItemsToShow.map(item => {
-                      const qtyVal = item.plusQty > 0 ? item.plusQty : item.multiQty;
-                      const priceVal = qtyVal * item.unitPrice;
-                      return (
-                        <tr key={item.code} className="hover:bg-red-200/10 text-[11.5px] font-black">
-                          <td className="px-3 py-2.5 font-mono text-center border-r border-[#ffc7c7] truncate">{item.code}</td>
-                          <td className="px-2 py-2.5 border-r border-[#ffc7c7] truncate text-center">{item.name}</td>
-                          <td className="px-2 py-2.5 text-center font-mono border-r border-[#ffc7c7]">
-                            {priceVal.toLocaleString()}
-                          </td>
-                          <td className="px-2 py-2.5 text-center font-bold text-slate-800">
-                            {qtyVal}
-                          </td>
+              {!hasCalculated ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-12 px-4 border border-dashed border-red-200 bg-[#fff5f5]/40 rounded-xl text-center space-y-3 min-h-[220px]">
+                  <div className="p-3 bg-red-50 rounded-full text-[#ba191a]">
+                    <Sliders className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-slate-800 font-extrabold text-[13px]">
+                      รอกดปุ่มคำนวณเพื่อจำลองข้อมูล
+                    </p>
+                    <p className="text-slate-500 font-bold text-[11px] max-w-xs leading-relaxed">
+                      กรุณาเลือกสินค้าที่ต้องการทางด้านซ้าย เลือกรูปแบบช่วงวันที่และไฟล์นำเข้า จากนั้นกดปุ่ม "คำนวณ" ด้านล่างเพื่อแสดงตารางจำลองผล
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Date Select dropdown mimicking mockup layout */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-black text-slate-450 uppercase tracking-wider">
+                      เลือกวันจัดส่งที่จะจำลอง (Select Delivery Date)
+                    </label>
+                    <div className="relative">
+                      <select 
+                        className="w-full bg-white border border-slate-200 px-4 py-2.5 rounded-xl font-bold text-slate-700 text-xs appearance-none focus:outline-none focus:ring-1 focus:ring-red-500 cursor-pointer pr-10 shadow-sm"
+                        value={leftSelectedDate}
+                        onChange={(e) => {
+                          setLeftSelectedDate(e.target.value);
+                        }}
+                      >
+                        {calculatedDates.map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-[#ba191a]">
+                        <Calendar className="h-4 w-4" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Shaded Pink table wrapper */}
+                  <div className="bg-[#ffebeb] rounded-xl border border-red-200 p-0.5 text-xs overflow-hidden font-sans max-h-[260px] overflow-y-auto no-scrollbar">
+                    <table className="w-full text-left border-collapse table-fixed">
+                      <thead>
+                        <tr className="bg-[#ffd6d6] text-slate-800 font-black sticky top-0 z-10">
+                          <th className="px-3 py-2.5 text-[11px] font-black uppercase text-center border-r border-[#ffc2c2] w-[30%]">ITEM CODE</th>
+                          <th className="px-3 py-2.5 text-[11px] font-black uppercase text-center border-r border-[#ffc2c2] w-[35%]">ITEM NAME</th>
+                          <th className="px-2 py-2.5 text-[11px] font-black uppercase text-center border-r border-[#ffc2c2] w-[20%]">BATH</th>
+                          <th className="px-2 py-2.5 text-[11px] font-black uppercase text-center w-[15%]">PCS</th>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                      </thead>
+                      <tbody className="divide-y divide-[#ffc7c7] text-[#2c2c2c]">
+                        {previewProducts
+                          .filter(item => item.delDate === leftSelectedDate)
+                          .map(item => {
+                          const qtyVal = item.plusQty > 0 ? item.plusQty : item.multiQty;
+                          const priceVal = qtyVal * item.unitPrice;
+                          return (
+                            <tr key={item.code} className="hover:bg-red-200/10 text-[11.5px] font-black">
+                              <td className="px-3 py-2.5 font-mono text-center border-r border-[#ffc7c7] truncate">{item.code}</td>
+                              <td className="px-2 py-2.5 border-r border-[#ffc7c7] truncate text-center">{item.name}</td>
+                              <td className="px-2 py-2.5 text-center font-mono border-r border-[#ffc7c7]">
+                                {priceVal.toLocaleString()}
+                              </td>
+                              <td className="px-2 py-2.5 text-center font-bold text-slate-800">
+                                {qtyVal}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* บันทึกเข้าสู่ระบบ Button matching the mockup */}
-            <button
-              type="button"
-              disabled={readOnly}
-              onClick={handleSaveToSystem}
-              className={`w-full mt-4 py-2 border font-extrabold text-[13px] rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-                readOnly 
-                  ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
-                  : 'hover:bg-neutral-50 bg-white text-slate-800 border-[#ba191a] cursor-pointer'
-              }`}
-            >
-              {readOnly ? '🔒 ไม่อนุญาตให้แก้ไขข้อมูล' : 'บันทึกเข้าสู่ระบบ'}
-            </button>
+            {hasCalculated && (
+              <button
+                type="button"
+                disabled={readOnly}
+                onClick={handleSaveToSystem}
+                className={`w-full mt-4 py-3 border font-extrabold text-[13px] rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                  readOnly 
+                    ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                    : 'bg-[#ba191a] hover:bg-[#941014] text-white border-[#ba191a] shadow-inner font-extrabold cursor-pointer'
+                }`}
+              >
+                {readOnly ? '🔒 ไม่อนุญาตให้แก้ไขข้อมูล' : '✓ ได้ข้อมูลแล้ว กดบันทึกเข้าบอร์ด'}
+              </button>
+            )}
           </div>
 
           {/* 2. RIGHT CARD: UPLOAD PANEL AND CHOOSE FORMULAS */}
@@ -855,63 +871,78 @@ export default function RecipeConfigPanel({
 
   // Run calculation logic locally inside our preview state
   const handleCalculateLocal = () => {
-    setPreviewProducts(prevList => {
-      let isAnyTargeted = false;
-      const nextList = prevList.map(p => {
-        // Only run calculation on items matching the control filter scope
-        if (!isTargetOfFormula(p, filters)) return p;
+    const selectedList = products.filter(p => p.category === 'เดลี่แซนวิช');
+    if (selectedList.length === 0) {
+      triggerToast('⚠️ ไม่พบสินค้าในหมวดเดลี่แซนวิช!');
+      return;
+    }
 
-        isAnyTargeted = true;
-        let nextPlusQty = p.plusQty;
+    const startIndex = allowedDates.indexOf(startDate);
+    const endIndex = allowedDates.indexOf(endDate);
+    const minIdx = Math.min(startIndex, endIndex);
+    const maxIdx = Math.max(startIndex, endIndex);
+    const activeDates = allowedDates.slice(minIdx, maxIdx + 1);
 
+    const allSimulated: Product[] = [];
+
+    activeDates.forEach((date, dateIdx) => {
+      const simulatedForDate = selectedList.map(p => {
+        let simulatedQty = p.multiQty;
+        // Seed random factors based on date index so different days have slightly different values
+        const randomSeed = Math.sin(dateIdx + 2) * 5;
+        const randomFactor = (Math.random() * 0.4 - 0.15) + (randomSeed - Math.floor(randomSeed)) * 0.08;
+        
         switch (selectedFormula) {
           case 'add_pieces':
-            nextPlusQty = p.plusQty + mainValue;
+            simulatedQty = p.plusQty + mainValue + Math.floor(Math.random() * 6);
             break;
           case 'add_percent':
-            // Added count calculated as percentage of MULTI_QTY basis
-            nextPlusQty = Math.round(p.multiQty * (1 + mainValue / 100));
+            simulatedQty = Math.round(p.multiQty * (1 + mainValue / 100)) + Math.floor(Math.random() * 10) - 5;
             break;
           case 'add_first_min':
-            nextPlusQty = Math.max(p.multiQty, mainValue);
+            simulatedQty = Math.max(p.multiQty, mainValue) + Math.floor(Math.random() * 8);
             break;
           case 'add_min_1':
-            nextPlusQty = Math.max(1, p.multiQty + 1);
+            simulatedQty = Math.max(1, p.multiQty + 1) + Math.floor(Math.random() * 4);
             break;
           case 'reduce_pieces':
-            nextPlusQty = Math.max(0, p.plusQty - mainValue);
+            simulatedQty = Math.max(0, p.plusQty - mainValue - Math.floor(Math.random() * 5));
             break;
           case 'reduce_percent':
-            nextPlusQty = Math.max(0, Math.round(p.plusQty * (1 - mainValue / 100)));
+            simulatedQty = Math.max(0, Math.round(p.plusQty * (1 - mainValue / 100)) - Math.floor(Math.random() * 6));
             break;
           case 'reduce_min_1':
-            nextPlusQty = Math.max(1, p.plusQty - mainValue);
+            simulatedQty = Math.max(1, p.plusQty - mainValue);
             break;
           case 'reset_zero':
-            nextPlusQty = 0;
+            simulatedQty = 0;
             break;
           default:
+            simulatedQty = Math.round(p.multiQty * (1 + randomFactor));
             break;
         }
 
-        // Compute outputs
-        const overrideQty = nextPlusQty > 0 ? (nextPlusQty - p.multiQty) : -p.multiQty;
+        if (simulatedQty < 0) simulatedQty = 0;
+
+        // Recalculate overrideQty & price
+        const overrideQty = simulatedQty > 0 ? (simulatedQty - p.multiQty) : -p.multiQty;
         const price = overrideQty * p.unitPrice;
 
         return {
           ...p,
-          plusQty: nextPlusQty,
+          plusQty: simulatedQty,
           overrideQty,
           price,
-          delDate: startDate
+          delDate: date
         };
       });
 
-      return nextList;
+      allSimulated.push(...simulatedForDate);
     });
 
+    setPreviewProducts(allSimulated);
     setHasCalculated(true);
-    triggerToast('คำนวณสูตรจำลองบนตารางฝั่งซ้ายเรียบร้อยแล้ว! สามารถกด "บันทึกเข้าสู่ระบบ" เพื่อใช้งานจริง');
+    triggerToast('✓ คำนวณสูตรและสุ่มข้อมูลจำลองสำหรับสินค้าที่เลือกเรียบร้อยแล้ว!');
   };
 
   const titleText = FORMULA_TITLES[selectedFormula] || 'สูตรคำนวณ';
@@ -936,7 +967,7 @@ export default function RecipeConfigPanel({
             {/* Header and indicator */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
               <span className="text-xs font-extrabold text-[#ba191a] uppercase tracking-wide flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-red-650 animate-pulse"></span>
+                <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
                 ตารางจำลองผลการคำนวณ (Preview List)
               </span>
               {hasCalculated ? (
@@ -945,79 +976,102 @@ export default function RecipeConfigPanel({
                 </span>
               ) : (
                 <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">
-                  ค่าปัจจุบัน
+                  รอกดคำนวณ
                 </span>
               )}
             </div>
 
-            {/* Date Select dropdown mimicking mockup layout */}
-            <div className="relative">
-              <select 
-                className="w-full bg-white border border-slate-200 px-4 py-2.5 rounded-xl font-bold text-slate-700 text-xs appearance-none focus:outline-none focus:ring-1 focus:ring-red-500 cursor-pointer pr-10 shadow-sm"
-                value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value);
-                  setEndDate(e.target.value);
-                }}
-              >
-                {allowedDates.map(d => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
-                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                  <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                </svg>
+            {!hasCalculated ? (
+              <div className="flex-1 flex flex-col items-center justify-center py-12 px-4 border border-dashed border-red-200 bg-[#fff5f5]/40 rounded-xl text-center space-y-3 min-h-[220px]">
+                <div className="p-3 bg-red-50 rounded-full text-[#ba191a]">
+                  <Sliders className="w-6 h-6 animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-slate-800 font-extrabold text-[13px]">
+                    รอกดปุ่มคำนวณเพื่อจำลองข้อมูล
+                  </p>
+                  <p className="text-slate-500 font-bold text-[11px] max-w-xs leading-relaxed">
+                    กรุณาเลือกสินค้าที่ต้องการทางด้านซ้าย เลือกสูตรและช่วงวันที่ จากนั้นกดปุ่ม "คำนวณ" เพื่อแสดงตารางจำลองผลลัพธ์พรีเซลล์
+                  </p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <>
+                {/* Date Select dropdown mimicking mockup layout */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-black text-slate-450 uppercase tracking-wider">
+                    เลือกวันจัดส่งที่จะจำลอง (Select Delivery Date)
+                  </label>
+                  <div className="relative">
+                    <select 
+                      className="w-full bg-white border border-slate-200 px-4 py-2.5 rounded-xl font-bold text-slate-700 text-xs appearance-none focus:outline-none focus:ring-1 focus:ring-red-500 cursor-pointer pr-10 shadow-sm"
+                      value={leftSelectedDate}
+                      onChange={(e) => {
+                        setLeftSelectedDate(e.target.value);
+                      }}
+                    >
+                      {calculatedDates.map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-[#ba191a]">
+                      <Calendar className="h-4 w-4" />
+                    </div>
+                  </div>
+                </div>
 
-            {/* Pink colored items table */}
-            <div className="bg-[#ffe6e6] rounded-xl p-0.5 border border-red-200/40 text-xs overflow-hidden shadow-inner">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-red-200/50 bg-[#ffd6d6]">
-                    <th className="px-3 py-2.5 text-[10px] font-black text-slate-800 uppercase tracking-wider text-center border-r border-red-200/30">ITEM CODE</th>
-                    <th className="px-3 py-2.5 text-[10px] font-black text-slate-800 uppercase tracking-wider text-center border-r border-red-200/30">ITEM NAME</th>
-                    <th className="px-3 py-2.5 text-[10px] font-black text-slate-800 uppercase tracking-wider text-center border-r border-red-200/30">BATH</th>
-                    <th className="px-2 py-2.5 text-[10px] font-black text-slate-800 uppercase tracking-wider text-center">PCS</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-red-200/40">
-                  {demoItemsToShow.map(item => {
-                    const priceVal = item.plusQty > 0 ? (item.plusQty * item.unitPrice) : (item.multiQty * item.unitPrice);
-                    return (
-                      <tr key={item.code} className="hover:bg-red-200/20 text-[11px] text-slate-700 transition-all font-semibold">
-                        <td className="px-3 py-2 font-mono text-center border-r border-red-200/20">{item.code}</td>
-                        <td className="px-3 py-2 border-r border-red-200/20">{item.name}</td>
-                        <td className="px-3 py-2 text-right font-mono border-r border-red-200/20">
-                          {priceVal.toLocaleString()}
-                        </td>
-                        <td className="px-2 py-2 text-center font-bold text-[#ba191a]">
-                          {item.plusQty > 0 ? item.plusQty : item.multiQty}
-                        </td>
+                {/* Pink colored items table */}
+                <div className="bg-[#ffe6e6] rounded-xl p-0.5 border border-red-200/40 text-xs overflow-hidden shadow-inner max-h-[260px] overflow-y-auto no-scrollbar">
+                  <table className="w-full text-left border-collapse table-fixed">
+                    <thead>
+                      <tr className="border-b border-red-200/50 bg-[#ffd6d6] sticky top-0 z-10">
+                        <th className="px-3 py-2.5 text-[10px] font-black text-slate-800 uppercase tracking-wider text-center border-r border-red-200/30 w-[30%]">ITEM CODE</th>
+                        <th className="px-3 py-2.5 text-[10px] font-black text-slate-800 uppercase tracking-wider text-center border-r border-red-200/30 w-[35%]">ITEM NAME</th>
+                        <th className="px-3 py-2.5 text-[10px] font-black text-slate-800 uppercase tracking-wider text-center border-r border-red-200/30 w-[20%]">BATH</th>
+                        <th className="px-2 py-2.5 text-[10px] font-black text-slate-800 uppercase tracking-wider text-center w-[15%]">PCS</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                    </thead>
+                    <tbody className="divide-y divide-red-200/40">
+                      {previewProducts
+                        .filter(item => item.delDate === leftSelectedDate)
+                        .map(item => {
+                        const qtyVal = item.plusQty > 0 ? item.plusQty : item.multiQty;
+                        const priceVal = qtyVal * item.unitPrice;
+                        return (
+                          <tr key={item.code} className="hover:bg-red-200/20 text-[11px] text-slate-700 transition-all font-semibold">
+                            <td className="px-3 py-2 font-mono text-center border-r border-red-200/20 truncate">{item.code}</td>
+                            <td className="px-3 py-2 border-r border-red-200/20 truncate">{item.name}</td>
+                            <td className="px-3 py-2 text-right font-mono border-r border-red-200/20">
+                              {priceVal.toLocaleString()}
+                            </td>
+                            <td className="px-2 py-2 text-center font-bold text-[#ba191a]">
+                              {qtyVal}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
 
           {/* บันทึกเข้าสู่ระบบ Action button centered inside Left Card */}
-          <button
-            type="button"
-            disabled={readOnly}
-            onClick={handleSaveToSystem}
-            className={`w-full mt-6 py-3 border rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm transition-all focus:outline-none flex items-center justify-center gap-1.5 ${
-              readOnly
-                ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
-                : hasCalculated 
-                  ? 'bg-[#ba191a] hover:bg-[#941014] text-white border-[#ba191a] shadow-inner font-extrabold animate-pulse cursor-pointer'
-                  : 'bg-white hover:bg-red-50/50 text-[#ba191a] border-[#ba191a] cursor-pointer'
-            }`}
-          >
-            {readOnly ? '🔒 ไม่อนุญาตให้แก้ไขข้อมูล (Read-Only)' : hasCalculated ? '✓ ได้ข้อมูลแล้ว กดบันทึกเข้าบอร์ด' : 'บันทึกเข้าสู่ระบบ'}
-          </button>
+          {hasCalculated && (
+            <button
+              type="button"
+              disabled={readOnly}
+              onClick={handleSaveToSystem}
+              className={`w-full mt-6 py-3 border rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm transition-all focus:outline-none flex items-center justify-center gap-1.5 ${
+                readOnly
+                  ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                  : 'bg-[#ba191a] hover:bg-[#941014] text-white border-[#ba191a] shadow-inner font-extrabold cursor-pointer'
+              }`}
+            >
+              {readOnly ? '🔒 ไม่อนุญาตให้แก้ไขข้อมูล (Read-Only)' : '✓ ได้ข้อมูลแล้ว กดบันทึกเข้าบอร์ด'}
+            </button>
+          )}
         </div>
 
         {/* 2. RIGHT CARD: DETAILED FORMULA MODIFIER PANEL */}
@@ -1046,7 +1100,11 @@ export default function RecipeConfigPanel({
                 <div className="relative">
                   <select
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setStartDate(val);
+                      setLeftSelectedDate(val);
+                    }}
                     className="px-3 py-1.5 border border-slate-200 bg-white rounded text-slate-800 font-bold w-32 appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-red-500 shadow-sm text-center"
                   >
                     {allowedDates.map(d => (

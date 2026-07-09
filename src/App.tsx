@@ -394,9 +394,9 @@ export default function App() {
   };
 
   // Toggle all visible products listed in current view
-  const handleToggleAllProducts = (checked: boolean) => {
-    const visibleIds = products.map(p => p.id);
-    setProducts(prev => prev.map(p => visibleIds.includes(p.id) ? { ...p, selected: checked } : p));
+  const handleToggleAllProducts = (checked: boolean, ids?: string[]) => {
+    const targetIds = ids || products.map(p => p.id);
+    setProducts(prev => prev.map(p => targetIds.includes(p.id) ? { ...p, selected: checked } : p));
   };
 
   // Delete selected products from the ACTIVE workbook
@@ -552,6 +552,19 @@ export default function App() {
 
         setFinalizedProducts(updatedFinalized);
         localStorage.setItem('farmhouse_presale_finalized_products', JSON.stringify(updatedFinalized));
+
+        // Sync with calendar history database
+        try {
+          const historyCached = localStorage.getItem('farmhouse_presale_history');
+          let historyObj: Record<string, any[]> = {};
+          if (historyCached) {
+            historyObj = JSON.parse(historyCached);
+          }
+          historyObj[currentDate] = updatedFinalized;
+          localStorage.setItem('farmhouse_presale_history', JSON.stringify(historyObj));
+        } catch (e) {
+          console.error("Error syncing to history database:", e);
+        }
       }
     );
   };

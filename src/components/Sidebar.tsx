@@ -26,7 +26,7 @@ interface SidebarProps {
   onSelectFormula: (formula: FormulaType) => void;
   selectedCount: number;
   onToggleProduct: (id: string) => void;
-  onToggleAllProducts: (checked: boolean) => void;
+  onToggleAllProducts: (checked: boolean, ids?: string[]) => void;
 }
 
 export default function Sidebar({
@@ -422,7 +422,7 @@ export default function Sidebar({
                     type="checkbox"
                     className="rounded border-slate-300 text-red-650 focus:ring-red-500 h-3.5 w-3.5"
                     checked={visibleProducts.length > 0 && visibleProducts.every(p => p.selected)}
-                    onChange={(e) => onToggleAllProducts(e.target.checked)}
+                    onChange={(e) => onToggleAllProducts(e.target.checked, visibleProducts.map(p => p.id))}
                   />
                   <span className="text-[11px] font-black text-slate-800">เลือกสินค้าทั้งหมด</span>
                   <span className="ml-auto text-[9px] bg-slate-200 text-slate-600 px-1.5 rounded font-black font-mono">
